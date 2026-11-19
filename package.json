@@ -1,0 +1,35 @@
+{
+  "name": "evolvesales",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EvolveSales — AI-powered self-evolving sales application",
+  "type": "module",
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --workspace-concurrency=1 build",
+    "dev:api": "pnpm --filter @evolvesales/api start:dev",
+    "dev:orchestrator": "pnpm --filter @evolvesales/orchestrator start:dev",
+    "dev:web": "pnpm --filter @evolvesales/web dev",
+    "lint": "oxlint --type-aware",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "test:e2e": "pnpm -r --workspace-concurrency=1 --if-present test:e2e",
+    "db:up": "docker compose --env-file .env -f deploy/compose.dev.yml up -d --wait postgres",
+    "db:down": "docker compose --env-file .env -f deploy/compose.dev.yml down",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "oxlint": "^1.58.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "prettier": "^3.10.1",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.8",
+    "vitest": "^4.1.2"
+  }
+}

@@ -1,0 +1,26 @@
+# dependencies / build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+**/generated/
+
+# secrets — never commit (this repository is public)
+.env
+.env.*
+!.env.example
+!**/.env.example
+!**/.env.*.example
+*.pem
+*.key
+secrets/
+
+# tooling
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+.DS_Store
+Thumbs.db
+playwright-report/
+test-results/
