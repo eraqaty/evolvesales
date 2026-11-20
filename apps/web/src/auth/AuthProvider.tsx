@@ -88,5 +88,9 @@ export function usePermissions() {
     canCreateInvoice: isSales,
     isSales,
     isSalesManager: has('SALES_MANAGER'),
+    isApprover: has('CHANGE_APPROVER'),
+    isAdmin: roles.includes('ADMIN'),
+    /** Approvers, release managers and admins see every change request. */
+    seesAllRequests: has('CHANGE_APPROVER') || has('RELEASE_MANAGER'),
   };
 }

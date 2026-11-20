@@ -1,11 +1,15 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AssistantModule } from './assistant/assistant.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { ChangeRequestsModule } from './change-requests/change-requests.module.js';
 import { ConfigModule } from './config/config.module.js';
 import { HealthModule } from './health/health.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { QueueModule } from './queue/queue.module.js';
 import { SalesModule } from './sales/sales.module.js';
 
 @Module({
@@ -18,6 +22,10 @@ import { SalesModule } from './sales/sales.module.js';
     AuthModule,
     HealthModule,
     SalesModule,
+    QueueModule,
+    ChangeRequestsModule,
+    AssistantModule,
+    NotificationsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

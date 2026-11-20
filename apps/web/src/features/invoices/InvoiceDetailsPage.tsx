@@ -22,6 +22,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { usePermissions } from '../../auth/AuthProvider';
 import { ApiError } from '../../lib/api';
+import { useScreenContext } from '../../lib/screen-context';
 import { useCancelInvoice, useConfirmInvoice, useInvoice } from './api';
 import { formatDate, formatMoney, formatPercent, StatusBadge } from './format';
 
@@ -29,6 +30,10 @@ export function InvoiceDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: inv, isPending, isError, error } = useInvoice(id);
+  useScreenContext({
+    screen: 'sales.invoices.details',
+    ...(inv && { selectedId: inv.number, filters: { status: inv.status } }),
+  });
 
   if (isPending) {
     return (

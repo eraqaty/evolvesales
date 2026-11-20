@@ -3,11 +3,12 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [react()],
-  resolve: { conditions: ['source'] },
+  resolve: { conditions: ['evolvesales-source'] },
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:3000',
+      // ws: true carries the Socket.IO websocket (under /api/v1/socket.io) too.
+      '/api': { target: 'http://localhost:3000', ws: true },
     },
   },
   test: {

@@ -5,8 +5,10 @@ language (web or WhatsApp); an AI agent analyses this repository and proposes a 
 approves; an isolated AI coding agent implements the change, runs the tests and opens a pull request
 for human review.
 
-> **Status:** Phase 0 (project bootstrap) complete. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)
-> for the full architecture, security design and phase plan.
+> **Status:** Phase 2a (change requests, AI assistant, approvals) in review. Repository analysis
+> (Phase 3) is not built yet, so every submitted request currently ends in **Failed — analysis agent
+> not configured**. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the full
+> architecture, security design and phase plan.
 
 ## Stack
 
@@ -24,13 +26,30 @@ workspaces · Docker · GitHub Actions.
 ```bash
 pnpm install
 cp .env.example .env        # set POSTGRES_PASSWORD (+ DATABASE_URL), JWT_ACCESS_SECRET, SEED_USER_PASSWORD
+                            # and ANTHROPIC_API_KEY for the AI assistant
 pnpm db:up                  # PostgreSQL on localhost:5432
 pnpm db:migrate             # apply Prisma migrations
 pnpm db:seed                # demo users, 15 customers, 25 products, 30 invoices
 pnpm build
 pnpm dev:api                # http://localhost:3000/api/v1/health  (Swagger: /api/docs)
+pnpm dev:orchestrator       # job worker (health: http://localhost:3001/health)
 pnpm dev:web                # http://localhost:5173
 ```
+
+## Change requests (Phase 2a)
+
+1. **Request a change** (header button) opens the AI assistant with the current screen's context.
+   It can also answer read-only questions about invoices and customers (max 10 rows, audited).
+2. The assistant fills a structured request card; **Submit request** creates `CR-0001`, … in
+   `SUBMITTED` and queues an `analyze` job.
+3. The Orchestrator picks the job up. Until the analysis agent arrives in Phase 3 it records a failed
+   job and moves the request to **Failed** with the reason "Analysis agent not configured". It never
+   invents a plan.
+4. Approvers use **Approvals** to approve, reject (reason required) or ask for clarification. A
+   requester cannot approve their own request; an Admin can, but only with an audited reason.
+   Approval authorizes coding only.
+5. Every status change is written to an append-only history and the audit log, notifies the people
+   involved (bell icon) and updates open browsers live over Socket.IO.
 
 Demo users (password = `SEED_USER_PASSWORD` from your `.env`):
 

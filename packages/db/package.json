@@ -6,7 +6,7 @@
   "type": "module",
   "exports": {
     ".": {
-      "source": "./src/index.ts",
+      "evolvesales-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
@@ -19,16 +19,16 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "migrate:status": "prisma migrate status",
-    "seed": "tsx --conditions=source prisma/seed.ts",
+    "seed": "tsx --conditions=evolvesales-source prisma/seed.ts",
     "studio": "prisma studio"
   },
   "dependencies": {
+    "@evolvesales/shared": "workspace:*",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "pg": "^8.23.1"
   },
   "devDependencies": {
-    "@evolvesales/shared": "workspace:*",
     "@types/pg": "^8.23.1",
     "argon2": "^0.45.2",
     "dotenv": "^18.0.10",

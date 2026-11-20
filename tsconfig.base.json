@@ -5,7 +5,7 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "resolvePackageJsonExports": true,
-    "customConditions": ["source"],
+    "customConditions": ["evolvesales-source"],
     "esModuleInterop": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": false,

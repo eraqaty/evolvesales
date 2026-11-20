@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { AuthProvider } from './auth/AuthProvider';
 import { ApiError } from './lib/api';
+import { RealtimeProvider } from './lib/realtime';
+import { ScreenContextProvider } from './lib/screen-context';
 import { theme } from './theme';
 
 export function createQueryClient(): QueryClient {
@@ -35,7 +37,11 @@ export function Providers({
       <DatesProvider settings={{ firstDayOfWeek: 6 }}>
         <Notifications position="top-right" />
         <QueryClientProvider client={queryClient}>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <RealtimeProvider>
+              <ScreenContextProvider>{children}</ScreenContextProvider>
+            </RealtimeProvider>
+          </AuthProvider>
         </QueryClientProvider>
       </DatesProvider>
     </MantineProvider>

@@ -520,13 +520,24 @@ AI-written PR code **never runs on the self-hosted runner**.
 
 ### Phase 2: Request management
 
-- [ ] Prisma: change-management tables; lifecycle module; pg-boss setup in the API (publish) and Orchestrator (consume)
-- [ ] LlmProvider (Anthropic + OpenAI), assistant endpoints with SSE, tools, persistence
-- [ ] Web: Request a Change drawer, screen-context registry, summary card, submit, status badge
-- [ ] Approval dashboard (list/detail/actions), notifications (Socket.IO + bell), monitor list + timeline (no jobs yet)
-- [ ] Orchestrator skeleton with a health endpoint; `analyze` handler stubbed to **fail explicitly** ("analysis agent not configured") rather than fake a plan
-- [ ] Read-only **data tools** for the assistant (§19.4), shared by web and WhatsApp
+- [x] Prisma: change-management tables; lifecycle module; pg-boss setup in the API (publish) and Orchestrator (consume)
+- [x] LlmProvider (Anthropic + OpenAI), assistant endpoints with SSE, tools, persistence
+- [x] Web: Request a Change drawer, screen-context registry, summary card, submit, status badge
+- [x] Approval dashboard (list/detail/actions), notifications (Socket.IO + bell), monitor list + timeline (no jobs yet)
+- [x] Orchestrator skeleton with a health endpoint; `analyze` handler stubbed to **fail explicitly** ("analysis agent not configured") rather than fake a plan
+- [x] Read-only **data tools** for the assistant (§19.4), shared by web and WhatsApp
 - **Exit 2a:** a real conversation with a real LLM creates a CR; approve, reject and clarify transitions work with role enforcement; audit rows written. _(Needs an AI key.)_
+
+**Phase 2a implementation notes (2026-11-20)**
+
+- The lifecycle rules live in `packages/shared/src/change-request/lifecycle.ts`; the transactional `transitionChangeRequest()` (guarded UPDATE, history, audit, notifications, `pg_notify`) lives in `packages/db/src/lifecycle.ts`, so the API and the Orchestrator share one implementation.
+- `LlmProvider` is in `apps/api/src/assistant/` (not a separate `packages/llm`) because only the API uses chat models today; the agent-runner in Phase 3 uses the Agent SDKs directly. It can move to a package when a second consumer appears.
+- Tests drive the real assistant code with the AI SDK's `MockLanguageModelV4` (scripted responses), so tool execution, validation, persistence and streaming are covered without network calls. Only Exit 2a's "real LLM" check needs your API key.
+- `analyze` jobs are enqueued inside the same transaction as the status change (`pg-boss` `fromPrisma(tx)`), so a job exists if and only if the change committed.
+- Screens C and D share one request detail page (`/requests/:id`) with Request / Plan / Timeline tabs; `/approvals` is the approver's list filtered to "Awaiting approval".
+- Realtime: lifecycle transitions `NOTIFY evolvesales_events` (delivered on commit, from either process); the API relays ids only to Socket.IO rooms `user:<id>` and `role:<role>`; browsers re-fetch through the authorised REST API.
+- Until Phase 3, every submitted request ends in `FAILED` ("Analysis agent not configured"), so approve/reject/clarify cannot be reached from the UI with real data yet. Those transitions are covered by integration tests that place a request in `AWAITING_APPROVAL` directly in the test database.
+- The workspace export condition was renamed from `source` to `evolvesales-source`, because the AI SDK's `eventsource-parser` also publishes a `source` condition.
 
 #### Phase 2b: WhatsApp channel (details in §19)
 

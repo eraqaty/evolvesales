@@ -40,6 +40,12 @@ model User {
   invoicesCancelled Invoice[]      @relation("InvoiceCancelledBy")
   auditLogs         AuditLog[]
 
+  changeRequests    ChangeRequest[]    @relation("CrRequester")
+  conversations     Conversation[]
+  approvalDecisions ApprovalDecision[]
+  statusTransitions StatusTransition[]
+  notifications     Notification[]
+
   @@map("users")
 }
 
@@ -181,6 +187,249 @@ model InvoiceItem {
   @@unique([invoiceId, lineNo])
   @@index([productId])
   @@map("invoice_items")
+}
+
+// ───────────────────────────── Change management ─────────────────────────────
+
+/// Mirrors CrStatus in packages/shared/src/change-request/lifecycle.ts.
+enum CrStatus {
+  SUBMITTED
+  ANALYZING
+  AWAITING_APPROVAL
+  CLARIFICATION_REQUIRED
+  APPROVED
+  REJECTED
+  CODING
+  TESTING
+  PULL_REQUEST_CREATED
+  REVIEW
+  STAGING
+  PRODUCTION_APPROVAL
+  RELEASED
+  FAILED
+}
+
+enum CrPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model ChangeRequest {
+  id              String     @id @default(uuid(7)) @db.Uuid
+  /// CR-0001, from the change_request_key_seq sequence.
+  key             String     @unique
+  title           String
+  requesterId     String     @map("requester_id") @db.Uuid
+  screen          String
+  screenContext   Json?      @map("screen_context")
+  originalRequest String     @map("original_request")
+  /// The validated ChangeRequestProposal the requester submitted.
+  structured      Json
+  status          CrStatus
+  priority        CrPriority @default(MEDIUM)
+  /// Questions from the approver (or analysis agent) waiting for the requester's answer.
+  pendingQuestions String[]  @default([]) @map("pending_questions")
+  baselineSha     String?    @map("baseline_sha")
+  branchName      String?    @map("branch_name")
+  currentPlanId   String?    @unique @map("current_plan_id") @db.Uuid
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  requester     User                 @relation("CrRequester", fields: [requesterId], references: [id])
+  currentPlan   ImplementationPlan?  @relation("CrCurrentPlan", fields: [currentPlanId], references: [id])
+  plans         ImplementationPlan[] @relation("CrPlans")
+  conversations Conversation[]
+  decisions     ApprovalDecision[]
+  transitions   StatusTransition[]
+  jobs          AgentJob[]
+
+  @@index([status])
+  @@index([requesterId])
+  @@map("change_requests")
+}
+
+enum ConversationStatus {
+  OPEN
+  SUBMITTED
+  CLOSED
+}
+
+enum Channel {
+  WEB
+  WHATSAPP
+}
+
+model Conversation {
+  id              String             @id @default(uuid(7)) @db.Uuid
+  userId          String             @map("user_id") @db.Uuid
+  changeRequestId String?            @map("change_request_id") @db.Uuid
+  channel         Channel            @default(WEB)
+  screen          String
+  screenContext   Json?              @map("screen_context")
+  status          ConversationStatus @default(OPEN)
+  /// Latest validated proposal from the assistant (shown as the summary card).
+  proposal        Json?
+  /// Latest ask_clarification questions from the assistant.
+  pendingClarification Json?         @map("pending_clarification")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user          User                  @relation(fields: [userId], references: [id])
+  changeRequest ChangeRequest?        @relation(fields: [changeRequestId], references: [id])
+  messages      ConversationMessage[]
+
+  @@index([userId])
+  @@index([changeRequestId])
+  @@map("conversations")
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
+model ConversationMessage {
+  id             String      @id @default(uuid(7)) @db.Uuid
+  conversationId String      @map("conversation_id") @db.Uuid
+  role           MessageRole
+  content        String
+  /// Tool calls, token usage, model id.
+  metadata       Json?
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("conversation_messages")
+}
+
+model ImplementationPlan {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  changeRequestId String   @map("change_request_id") @db.Uuid
+  version         Int
+  baselineSha     String?  @map("baseline_sha")
+  plan            Json
+  verifiedCount   Int      @default(0) @map("verified_count")
+  assumptionCount Int      @default(0) @map("assumption_count")
+  agent           String?
+  model           String?
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  changeRequest ChangeRequest      @relation("CrPlans", fields: [changeRequestId], references: [id])
+  currentFor    ChangeRequest?     @relation("CrCurrentPlan")
+  decisions     ApprovalDecision[]
+
+  @@unique([changeRequestId, version])
+  @@map("implementation_plans")
+}
+
+enum ApprovalDecisionKind {
+  APPROVED
+  REJECTED
+  CLARIFICATION
+}
+
+model ApprovalDecision {
+  id              String               @id @default(uuid(7)) @db.Uuid
+  changeRequestId String               @map("change_request_id") @db.Uuid
+  planId          String?              @map("plan_id") @db.Uuid
+  decision        ApprovalDecisionKind
+  actorId         String               @map("actor_id") @db.Uuid
+  comment         String?
+  /// Set when an Admin approved their own request (separation-of-duties override).
+  overrideReason  String?              @map("override_reason")
+  channel         Channel              @default(WEB)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  changeRequest ChangeRequest       @relation(fields: [changeRequestId], references: [id])
+  plan          ImplementationPlan? @relation(fields: [planId], references: [id])
+  actor         User                @relation(fields: [actorId], references: [id])
+
+  @@index([changeRequestId])
+  @@map("approval_decisions")
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+}
+
+/// Append-only lifecycle history (a trigger rejects UPDATE/DELETE).
+model StatusTransition {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  changeRequestId String    @map("change_request_id") @db.Uuid
+  from            CrStatus?
+  to              CrStatus
+  actorType       ActorType @map("actor_type")
+  actorId         String?   @map("actor_id") @db.Uuid
+  reason          String?
+  metadata        Json?
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  changeRequest ChangeRequest @relation(fields: [changeRequestId], references: [id])
+  actor         User?         @relation(fields: [actorId], references: [id])
+
+  @@index([changeRequestId, createdAt])
+  @@map("status_transitions")
+}
+
+enum AgentJobType {
+  ANALYZE
+  CODE
+}
+
+enum AgentJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  TIMED_OUT
+  CANCELLED
+}
+
+model AgentJob {
+  id              String         @id @default(uuid(7)) @db.Uuid
+  changeRequestId String         @map("change_request_id") @db.Uuid
+  type            AgentJobType
+  status          AgentJobStatus @default(QUEUED)
+  /// pg-boss job id that ran this.
+  queueJobId      String?        @map("queue_job_id")
+  agentKind       String?        @map("agent_kind")
+  model           String?
+  containerId     String?        @map("container_id")
+  imageDigest     String?        @map("image_digest")
+  startedAt       DateTime?      @map("started_at") @db.Timestamptz(3)
+  finishedAt      DateTime?      @map("finished_at") @db.Timestamptz(3)
+  exitCode        Int?           @map("exit_code")
+  inputTokens     Int?           @map("input_tokens")
+  outputTokens    Int?           @map("output_tokens")
+  costUsd         Decimal?       @map("cost_usd") @db.Decimal(10, 4)
+  error           String?
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  changeRequest ChangeRequest @relation(fields: [changeRequestId], references: [id])
+
+  @@index([changeRequestId])
+  @@index([status])
+  @@map("agent_jobs")
+}
+
+model Notification {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
 }
 
 // ───────────────────────────── Audit ─────────────────────────────
