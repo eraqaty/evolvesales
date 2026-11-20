@@ -5,7 +5,9 @@ import { randomBytes } from 'node:crypto';
 import request from 'supertest';
 import { inject } from 'vitest';
 import { Role } from '@evolvesales/db';
+import type { LanguageModel } from 'ai';
 import { AppModule } from '../src/app.module.js';
+import { LlmProvider } from '../src/assistant/llm.provider.js';
 import { configureApp } from '../src/configure-app.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
@@ -19,7 +21,17 @@ export interface TestApp {
   close: () => Promise<void>;
 }
 
-export async function createTestApp(env: Record<string, string> = {}): Promise<TestApp> {
+export interface TestAppOptions {
+  /** Replaces the real LLM with a test model (e.g. the AI SDK's MockLanguageModelV4). */
+  llm?: LanguageModel;
+  /** Listen on a random port (needed for Socket.IO clients). */
+  listen?: boolean;
+}
+
+export async function createTestApp(
+  env: Record<string, string> = {},
+  options: TestAppOptions = {},
+): Promise<TestApp> {
   Object.assign(process.env, {
     NODE_ENV: 'test',
     DATABASE_URL: inject('databaseUrl'),
@@ -27,12 +39,23 @@ export async function createTestApp(env: Record<string, string> = {}): Promise<T
     COOKIE_SECURE: 'false',
     LOGIN_RATE_LIMIT_PER_MINUTE: '1000',
     LOGIN_MAX_FAILURES: '3',
+    ANTHROPIC_API_KEY: '',
+    OPENAI_API_KEY: '',
     ...env,
   });
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  let builder = Test.createTestingModule({ imports: [AppModule] });
+  if (options.llm) {
+    const model = options.llm;
+    builder = builder.overrideProvider(LlmProvider).useValue({
+      status: () => ({ configured: true, provider: 'anthropic', model: 'test-model' }),
+      model: () => model,
+    });
+  }
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication();
   configureApp(app);
-  await app.init();
+  if (options.listen) await app.listen(0, '127.0.0.1');
+  else await app.init();
   const prisma = app.get(PrismaService);
   return {
     app,
@@ -44,9 +67,31 @@ export async function createTestApp(env: Record<string, string> = {}): Promise<T
 
 export async function resetDatabase(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "invoice_items", "invoices", "invoice_sequences", "products", "customers", ' +
+    'TRUNCATE "notifications", "agent_jobs", "status_transitions", "approval_decisions", ' +
+      '"implementation_plans", "conversation_messages", "conversations", "change_requests", ' +
+      '"invoice_items", "invoices", "invoice_sequences", "products", "customers", ' +
       '"refresh_tokens", "audit_logs", "users" RESTART IDENTITY CASCADE',
   );
+  await prisma.$executeRawUnsafe('ALTER SEQUENCE "change_request_key_seq" RESTART WITH 1');
+  await prisma.$executeRawUnsafe(`DELETE FROM pgboss.job WHERE name = 'cr-analyze'`);
+}
+
+/** Number of queued `cr-analyze` jobs for a request (pg-boss table). */
+export async function analyzeJobsFor(prisma: PrismaService, changeRequestId: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ n: bigint }>>(
+    `SELECT count(*) AS n FROM pgboss.job WHERE name = 'cr-analyze' AND data->>'changeRequestId' = $1`,
+    changeRequestId,
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** Parses a Server-Sent Events body into its JSON `data:` payloads. */
+export function parseSse<T = unknown>(body: string): T[] {
+  return body
+    .split('\n\n')
+    .map((block) => block.split('\n').find((l) => l.startsWith('data: ')))
+    .filter((l): l is string => l !== undefined)
+    .map((l) => JSON.parse(l.slice('data: '.length)) as T);
 }
 
 export interface Fixtures {

@@ -9,7 +9,7 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
-    seed: 'tsx --conditions=source prisma/seed.ts',
+    seed: 'tsx --conditions=evolvesales-source prisma/seed.ts',
   },
   datasource: {
     // Not `env()`: `prisma generate` must work in CI without a database URL.

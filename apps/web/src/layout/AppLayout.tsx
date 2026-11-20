@@ -2,6 +2,7 @@ import {
   AppShell,
   Avatar,
   Badge,
+  Button,
   Center,
   Group,
   Loader,
@@ -11,9 +12,17 @@ import {
   Title,
   UnstyledButton,
 } from '@mantine/core';
-import { IconFileInvoice, IconLogout } from '@tabler/icons-react';
+import {
+  IconChecklist,
+  IconFileInvoice,
+  IconGitPullRequest,
+  IconLogout,
+  IconSparkles,
+} from '@tabler/icons-react';
 import { Navigate, Outlet, Link as RouterLink, useLocation } from 'react-router';
-import { useAuth } from '../auth/AuthProvider';
+import { useAuth, usePermissions } from '../auth/AuthProvider';
+import { AssistantProvider, useAssistant } from '../features/assistant/AssistantContext';
+import { NotificationBell } from './NotificationBell';
 
 const ROLE_LABELS: Record<string, string> = {
   SALES_USER: 'Sales',
@@ -25,7 +34,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 /** Authenticated shell: redirects to /login when there is no session. */
 export function AppLayout() {
-  const { state, logout } = useAuth();
+  const { state } = useAuth();
   const location = useLocation();
 
   if (state.status === 'loading') {
@@ -39,6 +48,32 @@ export function AppLayout() {
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
 
+  return (
+    <AssistantProvider>
+      <Shell />
+    </AssistantProvider>
+  );
+}
+
+function RequestChangeButton() {
+  const assistant = useAssistant();
+  return (
+    <Button
+      size="xs"
+      variant="light"
+      leftSection={<IconSparkles size={16} />}
+      onClick={() => assistant.open()}
+    >
+      Request a change
+    </Button>
+  );
+}
+
+function Shell() {
+  const { state, logout } = useAuth();
+  const { isApprover } = usePermissions();
+  const location = useLocation();
+  if (!state.user) return null;
   const user = state.user;
   const initials = user.displayName
     .split(' ')
@@ -56,31 +91,35 @@ export function AppLayout() {
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
           <Title order={3}>EvolveSales</Title>
-          <Menu position="bottom-end" withinPortal>
-            <Menu.Target>
-              <UnstyledButton aria-label="Account menu">
-                <Group gap="xs">
-                  <Avatar radius="xl" size="sm" color="indigo">
-                    {initials}
-                  </Avatar>
-                  <div>
-                    <Text size="sm" fw={500} lh={1.1}>
-                      {user.displayName}
-                    </Text>
-                    <Text size="xs" c="dimmed" lh={1.1}>
-                      {user.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ')}
-                    </Text>
-                  </div>
-                </Group>
-              </UnstyledButton>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Label>{user.email}</Menu.Label>
-              <Menu.Item leftSection={<IconLogout size={16} />} onClick={() => void logout()}>
-                Sign out
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
+          <Group gap="sm">
+            <RequestChangeButton />
+            <NotificationBell />
+            <Menu position="bottom-end" withinPortal>
+              <Menu.Target>
+                <UnstyledButton aria-label="Account menu">
+                  <Group gap="xs">
+                    <Avatar radius="xl" size="sm" color="indigo">
+                      {initials}
+                    </Avatar>
+                    <div>
+                      <Text size="sm" fw={500} lh={1.1}>
+                        {user.displayName}
+                      </Text>
+                      <Text size="xs" c="dimmed" lh={1.1}>
+                        {user.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ')}
+                      </Text>
+                    </div>
+                  </Group>
+                </UnstyledButton>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Label>{user.email}</Menu.Label>
+                <Menu.Item leftSection={<IconLogout size={16} />} onClick={() => void logout()}>
+                  Sign out
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          </Group>
         </Group>
       </AppShell.Header>
       <AppShell.Navbar p="xs">
@@ -91,6 +130,22 @@ export function AppLayout() {
           leftSection={<IconFileInvoice size={18} />}
           active={location.pathname.startsWith('/invoices')}
         />
+        <NavLink
+          component={RouterLink}
+          to="/requests"
+          label="Change requests"
+          leftSection={<IconGitPullRequest size={18} />}
+          active={location.pathname.startsWith('/requests')}
+        />
+        {isApprover && (
+          <NavLink
+            component={RouterLink}
+            to="/approvals"
+            label="Approvals"
+            leftSection={<IconChecklist size={18} />}
+            active={location.pathname.startsWith('/approvals')}
+          />
+        )}
         <Badge variant="light" color="gray" mt="auto" size="xs">
           {import.meta.env.MODE}
         </Badge>

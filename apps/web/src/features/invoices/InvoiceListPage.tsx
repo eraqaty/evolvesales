@@ -19,10 +19,12 @@ import { INVOICE_STATUSES, type InvoiceStatus } from '@evolvesales/shared';
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { usePermissions } from '../../auth/AuthProvider';
+import { useScreenContext } from '../../lib/screen-context';
 import { useCustomers, useInvoices } from './api';
 import { formatDate, formatMoney, StatusBadge } from './format';
 
 const PAGE_SIZE = 15;
+const VISIBLE_COLUMNS = ['Number', 'Issue date', 'Customer', 'Status', 'Total'];
 
 export function InvoiceListPage() {
   const navigate = useNavigate();
@@ -50,6 +52,15 @@ export function InvoiceListPage() {
     }),
     [search, status, customerId, dateFrom, dateTo, page],
   );
+  useScreenContext({
+    screen: 'sales.invoices.list',
+    filters: Object.fromEntries(
+      Object.entries({ search, status, customerId, dateFrom, dateTo, page: String(page) }).filter(
+        (e): e is [string, string] => typeof e[1] === 'string' && e[1] !== '',
+      ),
+    ),
+    visibleColumns: VISIBLE_COLUMNS,
+  });
   const { data, isPending, isError, error, isFetching } = useInvoices(filters);
   const customers = useCustomers('');
 

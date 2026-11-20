@@ -1,5 +1,7 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { LoginPage } from './auth/LoginPage';
+import { ChangeRequestDetailPage } from './features/change-requests/ChangeRequestDetailPage';
+import { ChangeRequestListPage } from './features/change-requests/ChangeRequestListPage';
 import { InvoiceDetailsPage } from './features/invoices/InvoiceDetailsPage';
 import { InvoiceEditorPage } from './features/invoices/InvoiceEditorPage';
 import { InvoiceListPage } from './features/invoices/InvoiceListPage';
@@ -15,6 +17,9 @@ export const routes = [
       { path: 'invoices/new', element: <InvoiceEditorPage /> },
       { path: 'invoices/:id', element: <InvoiceDetailsPage /> },
       { path: 'invoices/:id/edit', element: <InvoiceEditorPage /> },
+      { path: 'requests', element: <ChangeRequestListPage mode="requests" /> },
+      { path: 'requests/:id', element: <ChangeRequestDetailPage /> },
+      { path: 'approvals', element: <ChangeRequestListPage mode="approvals" /> },
       { path: '*', element: <Navigate to="/invoices" replace /> },
     ],
   },

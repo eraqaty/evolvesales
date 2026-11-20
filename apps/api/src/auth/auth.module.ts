@@ -29,5 +29,7 @@ import { JwtAuthGuard, RolesGuard } from './guards.js';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
+  // The realtime gateway verifies the same access tokens.
+  exports: [JwtModule],
 })
 export class AuthModule {}

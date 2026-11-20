@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  resolve: { conditions: ['source'] },
-  ssr: { resolve: { conditions: ['source'] } },
+  resolve: { conditions: ['evolvesales-source'] },
+  ssr: { resolve: { conditions: ['evolvesales-source'] } },
   test: {
     include: ['test/**/*.e2e-spec.ts'],
     globalSetup: ['./test/global-setup.ts'],

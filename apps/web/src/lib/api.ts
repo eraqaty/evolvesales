@@ -36,6 +36,11 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
+/** Current in-memory access token (for the Socket.IO handshake). */
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
 export function setSessionLostHandler(handler: (() => void) | null): void {
   onSessionLost = handler;
 }
@@ -95,6 +100,56 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
   if (!res.ok) throw await parseError(res);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/**
+ * POSTs JSON and reads a Server-Sent Events response, calling `onEvent` for each `data:` payload.
+ * Errors before the stream starts (4xx/5xx JSON) are thrown as ApiError, like `api()`.
+ */
+export async function streamPost<E>(
+  path: string,
+  body: unknown,
+  onEvent: (event: E) => void,
+  signal?: AbortSignal,
+  retry = true,
+): Promise<void> {
+  const headers = new Headers({ 'Content-Type': 'application/json', Accept: 'text/event-stream' });
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    credentials: 'same-origin',
+    signal,
+  });
+  if (res.status === 401 && retry) {
+    const session = await refreshSession();
+    if (session) return streamPost(path, body, onEvent, signal, false);
+    accessToken = null;
+    onSessionLost?.();
+  }
+  if (!res.ok) throw await parseError(res);
+  if (!res.body) throw new ApiError(500, 'The server sent an empty stream');
+
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    let boundary = buffer.indexOf('\n\n');
+    while (boundary !== -1) {
+      const block = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      const data = block
+        .split('\n')
+        .filter((l) => l.startsWith('data: '))
+        .map((l) => l.slice(6))
+        .join('\n');
+      if (data) onEvent(JSON.parse(data) as E);
+      boundary = buffer.indexOf('\n\n');
+    }
+  }
 }
 
 export const http = {

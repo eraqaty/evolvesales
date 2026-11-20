@@ -26,6 +26,7 @@ import { useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { usePermissions } from '../../auth/AuthProvider';
 import { ApiError } from '../../lib/api';
+import { useScreenContext } from '../../lib/screen-context';
 import {
   type InvoiceBody,
   type ProductOption,
@@ -96,6 +97,10 @@ export function InvoiceEditorPage() {
   const { id } = useParams();
   const { canCreateInvoice } = usePermissions();
   const invoice = useInvoice(id);
+  useScreenContext({
+    screen: 'sales.invoices.editor',
+    ...(invoice.data && { selectedId: invoice.data.number }),
+  });
 
   if (!canCreateInvoice) return <Navigate to="/invoices" replace />;
   if (id && invoice.isPending) {

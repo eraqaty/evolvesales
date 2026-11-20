@@ -3,6 +3,7 @@ import { PrismaClient } from './generated/client.js';
 
 export * from './generated/client.js';
 export { allocateInvoiceNumber } from './invoice-number.js';
+export * from './lifecycle.js';
 
 /** Create a Prisma client over node-postgres. Use one instance per process. */
 export function createPrismaClient(connectionString: string): PrismaClient {

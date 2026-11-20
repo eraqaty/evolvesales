@@ -4,10 +4,14 @@ import { vi } from 'vitest';
 import { routes } from '../App';
 import { createQueryClient, Providers } from '../providers';
 
-type Handler = (
-  url: URL,
-  init: RequestInit | undefined,
-) => { status?: number; body?: unknown } | undefined;
+interface MockResult {
+  status?: number;
+  body?: unknown;
+  /** Respond as Server-Sent Events, one `data:` line per item. */
+  sse?: unknown[];
+}
+
+type Handler = (url: URL, init: RequestInit | undefined) => MockResult | undefined;
 
 /**
  * Installs a fake `fetch` that routes by "METHOD /path" and returns JSON.
@@ -25,7 +29,7 @@ export function jsonBody(init: RequestInit | undefined): Record<string, unknown>
   return JSON.parse(init.body) as Record<string, unknown>;
 }
 
-export function mockApi(handlers: Record<string, Handler | { status?: number; body?: unknown }>) {
+export function mockApi(handlers: Record<string, Handler | MockResult>) {
   const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
     const url = new URL(urlOf(input), 'http://localhost');
     const key = `${init?.method ?? 'GET'} ${url.pathname}`;
@@ -35,6 +39,10 @@ export function mockApi(handlers: Record<string, Handler | { status?: number; bo
       return new Response(JSON.stringify({ message: `unmocked ${key}` }), { status: 404 });
     }
     const status = result.status ?? 200;
+    if (result.sse) {
+      const text = result.sse.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+      return new Response(text, { status, headers: { 'Content-Type': 'text/event-stream' } });
+    }
     return new Response(status === 204 ? null : JSON.stringify(result.body ?? {}), {
       status,
       headers: { 'Content-Type': 'application/json' },
