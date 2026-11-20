@@ -9,3 +9,4 @@ export * from './change-request/lifecycle.js';
 export * from './change-request/schemas.js';
 export * from './change-request/dto.js';
 export * from './jobs.js';
+export * from './whatsapp.js';

@@ -16,6 +16,8 @@ export const envSchema = z.object({
   COOKIE_SECURE: booleanString.default(true),
   LOGIN_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(10),
   LOGIN_MAX_FAILURES: z.coerce.number().int().min(1).default(10),
+  /** Per-IP limit for phone-link and approval-PIN changes on the Profile page. */
+  PROFILE_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(5),
   LOGIN_LOCK_MINUTES: z.coerce.number().int().min(1).default(15),
 
   // ── AI Request Assistant (§6). Without a key the assistant answers 503 "not configured". ──
@@ -26,16 +28,72 @@ export const envSchema = z.object({
   ASSISTANT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(20),
   /** Upper bound on LLM steps (tool calls + answer) per user message. */
   ASSISTANT_MAX_STEPS: z.coerce.number().int().min(1).max(10).default(5),
+
+  // ── WhatsApp channel (§19). Off unless WHATSAPP_ENABLED=true and the credentials are set. ──
+  WHATSAPP_ENABLED: booleanString.default(false),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_WABA_ID: z.string().optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  /** Meta App Secret: verifies X-Hub-Signature-256 on every webhook call. */
+  WHATSAPP_APP_SECRET: z.string().optional(),
+  /** Any random string; Meta echoes it when you register the webhook. */
+  WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+  /** Signs approval-card buttons. Defaults to a key derived from JWT_ACCESS_SECRET. */
+  WHATSAPP_ACTION_SECRET: z.string().min(32).optional(),
+  WHATSAPP_GRAPH_VERSION: z
+    .string()
+    .regex(/^v\d+\.\d+$/)
+    .default('v23.0'),
+  WHATSAPP_GRAPH_BASE_URL: z.url().default('https://graph.facebook.com'),
+  /** The bot's number as users dial it (E.164), shown on the Profile page. */
+  WHATSAPP_DISPLAY_NUMBER: z.string().optional(),
+  WHATSAPP_TEMPLATE_LANGUAGE: z.string().default('en_US'),
+  /** How often the notification dispatcher looks for new notifications; 0 turns the timer off. */
+  WHATSAPP_DISPATCH_INTERVAL_MS: z.coerce.number().int().min(0).default(3000),
+  /** How often the API's channel worker polls for inbound messages (pg-boss, seconds). */
+  WHATSAPP_WORKER_POLL_SECONDS: z.coerce.number().min(0.5).default(1),
+  /** Public address of the web app, used in links sent to phones. */
+  PUBLIC_WEB_URL: z.url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+export interface WhatsAppConfig {
+  phoneNumberId: string;
+  accessToken: string;
+  appSecret: string;
+  verifyToken: string;
+  graphUrl: string;
+  displayNumber: string | null;
+  templateLanguage: string;
+}
+
+const WHATSAPP_REQUIRED = [
+  'WHATSAPP_PHONE_NUMBER_ID',
+  'WHATSAPP_ACCESS_TOKEN',
+  'WHATSAPP_APP_SECRET',
+  'WHATSAPP_VERIFY_TOKEN',
+] as const;
 
 /** Typed, validated configuration. Injected by class token. */
 export class AppConfig {
   constructor(readonly env: Env) {}
 
   static fromEnvironment(source: NodeJS.ProcessEnv = process.env): AppConfig {
-    const parsed = envSchema.safeParse(source);
+    const parsed = envSchema
+      .superRefine((env, ctx) => {
+        if (!env.WHATSAPP_ENABLED) return;
+        for (const key of WHATSAPP_REQUIRED) {
+          if (!env[key]?.trim()) {
+            ctx.addIssue({
+              code: 'custom',
+              path: [key],
+              message: 'required when WHATSAPP_ENABLED',
+            });
+          }
+        }
+      })
+      .safeParse(source);
     if (!parsed.success) {
       const problems = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`);
       throw new Error(`Invalid configuration:\n${problems.join('\n')}`);
@@ -45,6 +103,26 @@ export class AppConfig {
 
   get isProduction(): boolean {
     return this.env.NODE_ENV === 'production';
+  }
+
+  /** WhatsApp settings when the channel is enabled, otherwise null. */
+  get whatsapp(): WhatsAppConfig | null {
+    const e = this.env;
+    if (!e.WHATSAPP_ENABLED) return null;
+    return {
+      phoneNumberId: (e.WHATSAPP_PHONE_NUMBER_ID ?? '').trim(),
+      accessToken: (e.WHATSAPP_ACCESS_TOKEN ?? '').trim(),
+      appSecret: (e.WHATSAPP_APP_SECRET ?? '').trim(),
+      verifyToken: (e.WHATSAPP_VERIFY_TOKEN ?? '').trim(),
+      graphUrl: `${e.WHATSAPP_GRAPH_BASE_URL.replace(/\/$/, '')}/${e.WHATSAPP_GRAPH_VERSION}`,
+      displayNumber: e.WHATSAPP_DISPLAY_NUMBER?.trim() || null,
+      templateLanguage: e.WHATSAPP_TEMPLATE_LANGUAGE,
+    };
+  }
+
+  /** Base URL for links sent outside the browser (WhatsApp). */
+  get publicWebUrl(): string {
+    return (this.env.PUBLIC_WEB_URL ?? this.env.WEB_ORIGIN).replace(/\/$/, '');
   }
 
   /** The API key for the selected LLM provider, if one is configured. */

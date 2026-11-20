@@ -9,5 +9,6 @@ import { LlmProvider } from './llm.provider.js';
   imports: [ChangeRequestsModule],
   controllers: [AssistantController],
   providers: [AssistantService, DataToolsService, LlmProvider],
+  exports: [AssistantService],
 })
 export class AssistantModule {}
