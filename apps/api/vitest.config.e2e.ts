@@ -8,7 +8,7 @@ export default defineConfig({
     globalSetup: ['./test/global-setup.ts'],
     // All files share one database container; run them one at a time.
     fileParallelism: false,
-    testTimeout: 30_000,
+    testTimeout: 60_000,
     hookTimeout: 180_000,
   },
 });

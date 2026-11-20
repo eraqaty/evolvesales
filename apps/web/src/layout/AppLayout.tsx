@@ -18,6 +18,7 @@ import {
   IconGitPullRequest,
   IconLogout,
   IconSparkles,
+  IconUserCircle,
 } from '@tabler/icons-react';
 import { Navigate, Outlet, Link as RouterLink, useLocation } from 'react-router';
 import { useAuth, usePermissions } from '../auth/AuthProvider';
@@ -114,6 +115,13 @@ function Shell() {
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Label>{user.email}</Menu.Label>
+                <Menu.Item
+                  component={RouterLink}
+                  to="/profile"
+                  leftSection={<IconUserCircle size={16} />}
+                >
+                  Profile and WhatsApp
+                </Menu.Item>
                 <Menu.Item leftSection={<IconLogout size={16} />} onClick={() => void logout()}>
                   Sign out
                 </Menu.Item>

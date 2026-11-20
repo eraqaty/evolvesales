@@ -51,7 +51,7 @@ export const auditContext = (ctx: RequestContext): TransitionAuditContext => ({
   ip: ctx.ip,
   userAgent: ctx.userAgent,
   correlationId: ctx.correlationId,
-  channel: 'WEB',
+  channel: ctx.channel ?? 'WEB',
 });
 
 export interface SubmitInput {
@@ -197,6 +197,7 @@ export class ChangeRequestsService {
             planId: cr.currentPlanId,
             decision: 'APPROVED',
             actorId: user.id,
+            channel: ctx.channel ?? 'WEB',
             comment: input.comment || null,
             overrideReason: self === 'admin-override-required' ? overrideReason : null,
           },
@@ -241,6 +242,7 @@ export class ChangeRequestsService {
             planId: cr.currentPlanId,
             decision: 'REJECTED',
             actorId: user.id,
+            channel: ctx.channel ?? 'WEB',
             comment: input.comment,
           },
         });
@@ -273,6 +275,7 @@ export class ChangeRequestsService {
             planId: cr.currentPlanId,
             decision: 'CLARIFICATION',
             actorId: user.id,
+            channel: ctx.channel ?? 'WEB',
             comment: text,
           },
         });

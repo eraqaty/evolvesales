@@ -158,6 +158,7 @@ export const http = {
     api<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) }),
   put: <T>(path: string, body: unknown) =>
     api<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: <T>(path: string) => api<T>(path, { method: 'DELETE' }),
 };
 
 /** Turns `{ a: 1, b: undefined }` into `?a=1`. */

@@ -11,7 +11,8 @@ import { configureApp } from './configure-app.js';
 loadEnv({ path: path.resolve(import.meta.dirname, '../../../.env'), quiet: true });
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: the WhatsApp webhook signature is computed over the exact bytes Meta sent.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   configureApp(app);
   app.enableShutdownHooks();
   const config = app.get(AppConfig);

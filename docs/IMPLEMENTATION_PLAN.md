@@ -541,16 +541,33 @@ AI-written PR code **never runs on the self-hosted runner**.
 
 #### Phase 2b: WhatsApp channel (details in §19)
 
-- [ ] Phone linking + approval PIN in the user profile
-- [ ] Webhook (signature check, idempotency, queue), WhatsApp client, delivery-status tracking
-- [ ] Channel-agnostic conversation engine + WhatsApp renderer (text, reply buttons, list messages)
-- [ ] Approval cards with Approve / Reject / Clarify + PIN step; notification templates
-- [ ] Tunnel exposing only `/webhooks/whatsapp`
+- [x] Phone linking + approval PIN in the user profile
+- [x] Webhook (signature check, idempotency, queue), WhatsApp client, delivery-status tracking
+- [x] Channel-agnostic conversation engine + WhatsApp renderer (text, reply buttons, list messages)
+- [x] Approval cards with Approve / Reject / Clarify + PIN step; notification templates
+- [x] Tunnel exposing only `/webhooks/whatsapp` (`tools/ngrok/whatsapp-only.yml`)
 - **Exit 2b:**
   - From a real phone on the Meta test number, a sales user asks a data question and gets a correct, role-limited answer.
   - The same user submits a change request.
   - The admin's phone receives the approval card; Approve + PIN moves the CR to APPROVED.
   - The web dashboard shows the same history, with channel = WHATSAPP in the audit log.
+
+**Phase 2b decisions (2026-11-20)**
+
+- Build all of 2b now. The live checks for the data question and the WhatsApp submission run once P6/P7 are ready. The live **Approve + PIN** check runs right after Phase 3, because no request can reach `AWAITING_APPROVAL` before the analysis agent exists; until then, integration tests cover approval cards.
+- Phone linking: the user sends the code from WhatsApp (§19.3).
+- P6/P7 are not ready yet. Development and tests use recorded Meta webhook payloads and a local fake Graph API; `docs/WHATSAPP_SETUP.md` walks through the Meta and ngrok setup.
+
+**Phase 2b implementation notes (2026-11-20)**
+
+- **One engine:** the WhatsApp worker calls the same `AssistantService` as the web drawer, so it shares tools, limits, persistence and submission. That service already emits channel-neutral events, so no separate `ConversationEngine` class was needed. WhatsApp conversations get a WhatsApp section in the system prompt and an `ask_screen` tool, which renders as a list message.
+- **Worker:** inbound messages are stored (`inbound_channel_events`, unique wamid) and enqueued on the pg-boss queue `whatsapp-inbound` in one transaction. The API consumes the queue one message at a time. The webhook verifies `X-Hub-Signature-256` over the raw body and answers 404 when WhatsApp is disabled.
+- **Notifications:** the existing notification rows drive WhatsApp delivery. A dispatcher claims each row with a guarded UPDATE (`whatsapp_handled_at`), so several API instances never send it twice. Notifications older than one hour are not sent to WhatsApp.
+- **24-hour window:** tracked per user (`users.whatsapp_last_inbound_at`) instead of per conversation, because notifications are not tied to a conversation.
+- **PINs:** a message received while the bot waits for a PIN is overwritten in `inbound_channel_events` and never reaches the LLM. A step that expired less than 30 minutes ago still catches a late PIN. Weak PINs (one repeated digit, a straight run) are refused, and setting a PIN requires the account password.
+- **Separation of duties on WhatsApp:** nobody can decide on their own request from WhatsApp, and approvers get no card for it. An admin self-approval with a reason stays a web-only action.
+- **Tests:** the Graph API is replaced by a local HTTP server (`apps/api/test/fake-graph.ts`) through `WHATSAPP_GRAPH_BASE_URL`, instead of nock. This needs no new dependency and also exercises the real `fetch` path.
+- **Live verification (Exit 2b)** is still open. It needs P6/P7, and the Approve + PIN step needs Phase 3.
 
 ### Phase 3: Repository analysis
 
@@ -669,12 +686,13 @@ Phone ⇄ WhatsApp ⇄ Meta Cloud API ──webhook (HTTPS via tunnel)──▶ 
 
 ### 19.3 Identity, linking and approval security
 
-- **Phone linking:**
+- **Phone linking** _(decision 2026-11-20: the user sends the code; this replaces the authentication-template flow)_:
   1. In the web Profile page, the user enters their number (E.164).
-  2. The app sends a 6-digit code through an approved WhatsApp **authentication template**.
-  3. The user types the code on the web page.
-  4. The phone is marked verified.
+  2. The page shows a 6-digit code (valid 10 minutes, stored hashed) and a `wa.me` link to the bot.
+  3. The user sends `LINK 123456` to the bot **from that number**. Meta signs every webhook, so the sender's number is proven.
+  4. The phone is marked verified only if the sender matches the number entered and the code matches (5 attempts).
   5. Only verified numbers are recognised; unlinking is possible at any time.
+  - Linking needs no authentication template, Meta template approval or per-message cost.
 - **Approval PIN:** set in the web Profile (argon2-hashed). 5 wrong attempts lock WhatsApp approvals for 30 minutes and notify the user.
 - **Approval flow:**
   1. The admin taps **Approve**.

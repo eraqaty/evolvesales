@@ -14,6 +14,8 @@ export interface RequestContext {
   ip: string | null;
   userAgent: string | null;
   correlationId: string | null;
+  /** Where the action came from; WEB when absent. */
+  channel?: 'WEB' | 'WHATSAPP';
 }
 
 export const CORRELATION_HEADER = 'x-correlation-id';
