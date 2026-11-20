@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { APP_NAME } from '@evolvesales/shared';
+import { Public } from '../auth/decorators.js';
 
 export interface HealthStatus {
   status: 'ok';
@@ -9,6 +10,7 @@ export interface HealthStatus {
   time: string;
 }
 
+@Public()
 @Controller('health')
 export class HealthController {
   @Get()

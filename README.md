@@ -23,13 +23,34 @@ workspaces · Docker · GitHub Actions.
 
 ```bash
 pnpm install
-cp .env.example .env        # then set POSTGRES_PASSWORD (and DATABASE_URL to match)
+cp .env.example .env        # set POSTGRES_PASSWORD (+ DATABASE_URL), JWT_ACCESS_SECRET, SEED_USER_PASSWORD
 pnpm db:up                  # PostgreSQL on localhost:5432
+pnpm db:migrate             # apply Prisma migrations
+pnpm db:seed                # demo users, 15 customers, 25 products, 30 invoices
 pnpm build
-pnpm dev:api                # http://localhost:3000/api/v1/health
-pnpm dev:orchestrator       # http://localhost:3001/health
+pnpm dev:api                # http://localhost:3000/api/v1/health  (Swagger: /api/docs)
 pnpm dev:web                # http://localhost:5173
 ```
+
+Demo users (password = `SEED_USER_PASSWORD` from your `.env`):
+
+| Email                        | Role            | Can                                                 |
+| ---------------------------- | --------------- | --------------------------------------------------- |
+| `sales@evolvesales.local`    | Sales           | create/edit own drafts, confirm, cancel own drafts  |
+| `manager@evolvesales.local`  | Sales manager   | all of the above + edit any draft, cancel confirmed |
+| `approver@evolvesales.local` | Change approver | read invoices (approves AI changes from Phase 2)    |
+| `release@evolvesales.local`  | Release manager | read invoices (approves releases from Phase 5)      |
+| `admin@evolvesales.local`    | Admin           | everything                                          |
+
+## Invoice rules (Phase 1)
+
+- Numbers `INV-YYYY-000001`, allocated per year inside the creating transaction.
+- Per line: gross = qty × price → line discount % → invoice discount % (shared across lines) →
+  tax at the product's rate → line total. Calculated by `packages/shared` (decimal.js, half-up to
+  2 dp) in both the browser preview and the API; the API's result is the one stored.
+- Draft → Confirmed → Cancelled. Only drafts can be edited (optimistic `version` check → 409).
+  Cancelling a confirmed invoice needs a sales manager and a reason. Cancelled is final.
+- Every change is written to the append-only `audit_logs` table (a DB trigger rejects UPDATE/DELETE).
 
 ## Quality gate
 

@@ -1,41 +1,27 @@
-import { AppShell, Badge, Container, Group, Stack, Text, Title } from '@mantine/core';
-import { useEffect, useState } from 'react';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import { LoginPage } from './auth/LoginPage';
+import { InvoiceDetailsPage } from './features/invoices/InvoiceDetailsPage';
+import { InvoiceEditorPage } from './features/invoices/InvoiceEditorPage';
+import { InvoiceListPage } from './features/invoices/InvoiceListPage';
+import { AppLayout } from './layout/AppLayout';
 
-type ApiState = 'checking' | 'online' | 'offline';
+export const routes = [
+  { path: '/login', element: <LoginPage /> },
+  {
+    element: <AppLayout />,
+    children: [
+      { index: true, element: <Navigate to="/invoices" replace /> },
+      { path: 'invoices', element: <InvoiceListPage /> },
+      { path: 'invoices/new', element: <InvoiceEditorPage /> },
+      { path: 'invoices/:id', element: <InvoiceDetailsPage /> },
+      { path: 'invoices/:id/edit', element: <InvoiceEditorPage /> },
+      { path: '*', element: <Navigate to="/invoices" replace /> },
+    ],
+  },
+];
+
+const router = createBrowserRouter(routes);
 
 export function App() {
-  const [apiState, setApiState] = useState<ApiState>('checking');
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/v1/health', { signal: controller.signal })
-      .then((res) => setApiState(res.ok ? 'online' : 'offline'))
-      .catch(() => {
-        if (!controller.signal.aborted) setApiState('offline');
-      });
-    return () => controller.abort();
-  }, []);
-
-  const badgeColor = apiState === 'online' ? 'teal' : apiState === 'offline' ? 'red' : 'gray';
-
-  return (
-    <AppShell header={{ height: 56 }} padding="md">
-      <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Title order={3}>EvolveSales</Title>
-          <Badge color={badgeColor} variant="light" aria-label="API status">
-            API {apiState}
-          </Badge>
-        </Group>
-      </AppShell.Header>
-      <AppShell.Main>
-        <Container size="lg">
-          <Stack gap="xs">
-            <Title order={2}>Sales Invoices</Title>
-            <Text c="dimmed">The invoice management screen is built in Phase 1.</Text>
-          </Stack>
-        </Container>
-      </AppShell.Main>
-    </AppShell>
-  );
+  return <RouterProvider router={router} />;
 }

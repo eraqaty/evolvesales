@@ -1,31 +1,35 @@
-import type { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
-import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AppModule } from '../src/app.module.js';
-import { configureApp } from '../src/configure-app.js';
+import { createTestApp, type TestApp } from './helpers.js';
 
 describe('GET /api/v1/health (e2e)', () => {
-  let app: INestApplication;
+  let t: TestApp;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication();
-    configureApp(app);
-    await app.init();
+    t = await createTestApp();
   });
 
   afterAll(async () => {
-    await app.close();
+    await t.close();
   });
 
-  it('returns 200 with status ok', async () => {
-    const res = await request(app.getHttpServer()).get('/api/v1/health').expect(200);
+  it('is public and returns status ok', async () => {
+    const res = await t.http().get('/api/v1/health').expect(200);
     expect(res.body).toMatchObject({ status: 'ok', service: 'api' });
   });
 
+  it('echoes a correlation id and sets security headers', async () => {
+    const res = await t.http().get('/api/v1/health').set('x-correlation-id', 'test-corr-1234');
+    expect(res.headers['x-correlation-id']).toBe('test-corr-1234');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+  });
+
   it('does not serve routes outside the api prefix', async () => {
-    const res = await request(app.getHttpServer()).get('/health');
+    const res = await t.http().get('/health');
     expect(res.status).toBe(404);
+  });
+
+  it('requires authentication for everything else', async () => {
+    const res = await t.http().get('/api/v1/invoices');
+    expect(res.status).toBe(401);
   });
 });

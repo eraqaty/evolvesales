@@ -607,7 +607,10 @@ AI-written PR code **never runs on the self-hosted runner**.
 - required status check `ci`
 - linear history
 - no force-push or deletion
-- rules apply to administrators too
+- required conversation resolution; stale approvals dismissed on new pushes; the last push must be approved by someone else
+- squash merge only; branches deleted after merge
+- **Applied 2026-11-19.** Admins (the repo owner) may bypass the rules (`enforce_admins: false`). As the only human maintainer, the owner can't approve their own PRs, so development PRs during Phases 1–5 are merged with the admin bypass. The AI's GitHub App is never an admin, so it can't bypass anything: an agent PR always needs the owner's approval + green CI. Revisit when a second maintainer joins.
+- Also applied: secret scanning + push protection, Dependabot alerts, approval required for workflow runs from all external contributors, workflow `GITHUB_TOKEN` read-only by default and not allowed to approve PRs.
 
 **Extra hardening because the repo is public:**
 
