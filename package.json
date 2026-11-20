@@ -21,6 +21,8 @@
     "test:e2e": "pnpm -r --workspace-concurrency=1 --if-present test:e2e",
     "db:up": "docker compose --env-file .env -f deploy/compose.dev.yml up -d --wait postgres",
     "db:down": "docker compose --env-file .env -f deploy/compose.dev.yml down",
+    "db:migrate": "pnpm --filter @evolvesales/db migrate:deploy",
+    "db:seed": "pnpm --filter @evolvesales/db seed",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {

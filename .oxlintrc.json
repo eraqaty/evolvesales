@@ -21,5 +21,15 @@
     ],
     "no-console": ["warn", { "allow": ["warn", "error"] }]
   },
+  "overrides": [
+    {
+      "files": ["**/*.spec.ts", "**/*.e2e-spec.ts", "**/*.test.tsx", "**/test/**"],
+      "rules": {
+        "typescript/no-unsafe-type-assertion": "off",
+        "vitest/expect-expect": ["error", { "assertFunctionNames": ["expect", "**.expect"] }],
+        "typescript/no-non-null-assertion": "off"
+      }
+    }
+  ],
   "ignorePatterns": ["**/dist/**", "**/coverage/**", "**/node_modules/**", "**/generated/**"]
 }

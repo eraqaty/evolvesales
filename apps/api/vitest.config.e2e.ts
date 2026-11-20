@@ -4,8 +4,11 @@ export default defineConfig({
   resolve: { conditions: ['source'] },
   ssr: { resolve: { conditions: ['source'] } },
   test: {
-    // NestJS module compilation is slow on a cold start (notably on Windows/CI).
-    testTimeout: 15_000,
     include: ['test/**/*.e2e-spec.ts'],
+    globalSetup: ['./test/global-setup.ts'],
+    // All files share one database container; run them one at a time.
+    fileParallelism: false,
+    testTimeout: 30_000,
+    hookTimeout: 180_000,
   },
 });
