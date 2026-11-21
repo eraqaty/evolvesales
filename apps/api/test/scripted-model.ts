@@ -20,9 +20,13 @@ const usage = {
 /**
  * A deterministic stand-in for the LLM: replays `steps` in order, one per model call, so tests
  * drive the real assistant code (tool execution, persistence, streaming) without a network call.
- * `calls` records the prompts the assistant actually sent.
+ * `calls` records the prompts the assistant actually sent. With `queue: true` each call takes
+ * (removes) the first step, so a test file can refill `steps` per test.
  */
-export function scriptedModel(steps: ScriptedStep[]): {
+export function scriptedModel(
+  steps: ScriptedStep[],
+  mode: { queue?: boolean } = {},
+): {
   model: MockLanguageModelV4;
   calls: LanguageModelV4CallOptions[];
 } {
@@ -31,7 +35,8 @@ export function scriptedModel(steps: ScriptedStep[]): {
   const model = new MockLanguageModelV4({
     doStream: (options) => {
       calls.push(options);
-      const step = steps[index++] ?? { text: '(no more scripted steps)' };
+      const next = mode.queue ? steps.shift() : steps[index++];
+      const step = next ?? { text: '(no more scripted steps)' };
       const parts: LanguageModelV4StreamPart[] = [{ type: 'stream-start', warnings: [] }];
       if (step.text) {
         parts.push(

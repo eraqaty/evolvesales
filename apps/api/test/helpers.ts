@@ -38,9 +38,11 @@ export async function createTestApp(
     JWT_ACCESS_SECRET: randomBytes(32).toString('hex'),
     COOKIE_SECURE: 'false',
     LOGIN_RATE_LIMIT_PER_MINUTE: '1000',
+    PROFILE_RATE_LIMIT_PER_MINUTE: '1000',
     LOGIN_MAX_FAILURES: '3',
     ANTHROPIC_API_KEY: '',
     OPENAI_API_KEY: '',
+    WHATSAPP_ENABLED: 'false',
     ...env,
   });
   let builder = Test.createTestingModule({ imports: [AppModule] });
@@ -52,7 +54,7 @@ export async function createTestApp(
     });
   }
   const moduleRef = await builder.compile();
-  const app = moduleRef.createNestApplication();
+  const app = moduleRef.createNestApplication({ rawBody: true });
   configureApp(app);
   if (options.listen) await app.listen(0, '127.0.0.1');
   else await app.init();
@@ -68,12 +70,15 @@ export async function createTestApp(
 export async function resetDatabase(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE "notifications", "agent_jobs", "status_transitions", "approval_decisions", ' +
-      '"implementation_plans", "conversation_messages", "conversations", "change_requests", ' +
+      '"implementation_plans", "conversation_messages", "pending_actions", "outbound_messages", ' +
+      '"inbound_channel_events", "phone_verifications", "conversations", "change_requests", ' +
       '"invoice_items", "invoices", "invoice_sequences", "products", "customers", ' +
       '"refresh_tokens", "audit_logs", "users" RESTART IDENTITY CASCADE',
   );
   await prisma.$executeRawUnsafe('ALTER SEQUENCE "change_request_key_seq" RESTART WITH 1');
-  await prisma.$executeRawUnsafe(`DELETE FROM pgboss.job WHERE name = 'cr-analyze'`);
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM pgboss.job WHERE name IN ('cr-analyze', 'whatsapp-inbound')`,
+  );
 }
 
 /** Number of queued `cr-analyze` jobs for a request (pg-boss table). */

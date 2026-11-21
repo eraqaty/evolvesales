@@ -9,8 +9,10 @@ import { ConfigModule } from './config/config.module.js';
 import { HealthModule } from './health/health.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { ProfileModule } from './profile/profile.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { SalesModule } from './sales/sales.module.js';
+import { WhatsAppModule } from './whatsapp/whatsapp.module.js';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { SalesModule } from './sales/sales.module.js';
     ChangeRequestsModule,
     AssistantModule,
     NotificationsModule,
+    ProfileModule,
+    WhatsAppModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

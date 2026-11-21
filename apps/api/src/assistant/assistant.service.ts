@@ -11,6 +11,7 @@ import { Prisma } from '@evolvesales/db';
 import {
   ASSISTANT_LIMITS,
   type AssistantStreamEvent,
+  type Screen,
   type ChangeRequestProposal,
   changeRequestProposalSchema,
   type Clarification,
@@ -20,6 +21,7 @@ import {
   type ScreenContext,
   screenContextSchema,
 } from '@evolvesales/shared';
+import { z } from 'zod';
 import { type ModelMessage, stepCountIs, streamText, tool, type ToolSet } from 'ai';
 import { AuditService } from '../audit/audit.service.js';
 import type { AuthUser } from '../auth/auth.types.js';
@@ -105,6 +107,44 @@ export class AssistantService {
     return this.getConversation(created.id, user);
   }
 
+  /**
+   * The WhatsApp thread messages go to: the newest WhatsApp conversation that is still open (or
+   * waiting for clarification answers), otherwise a new one. `fresh` always starts a new one.
+   */
+  async activeWhatsAppConversation(user: AuthUser, fresh = false): Promise<string> {
+    if (!fresh) {
+      const latest = await this.prisma.conversation.findFirst({
+        where: { userId: user.id, channel: 'WHATSAPP', status: { not: 'CLOSED' } },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true, status: true, changeRequest: { select: { status: true } } },
+      });
+      if (
+        latest &&
+        (latest.status === 'OPEN' || latest.changeRequest?.status === 'CLARIFICATION_REQUIRED')
+      ) {
+        return latest.id;
+      }
+    }
+    await this.prisma.conversation.updateMany({
+      where: { userId: user.id, channel: 'WHATSAPP', status: 'OPEN' },
+      data: { status: 'CLOSED' },
+    });
+    const created = await this.prisma.conversation.create({
+      data: { userId: user.id, channel: 'WHATSAPP', screen: 'other' },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
+  /** Records the screen a WhatsApp user picked from the list (there is no screen context). */
+  async setScreen(conversationId: string, screen: Screen, user: AuthUser): Promise<void> {
+    const conversation = await this.loadOwn(conversationId, user);
+    await this.prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { screen, screenContext: { screen, route: 'whatsapp' } },
+    });
+  }
+
   async getConversation(id: string, user: AuthUser): Promise<ConversationDto> {
     return toConversationDto(await this.loadOwn(id, user));
   }
@@ -118,6 +158,7 @@ export class AssistantService {
     content: string,
     user: AuthUser,
     ctx: RequestContext,
+    options: { externalId?: string } = {},
   ): Promise<(signal: AbortSignal) => AsyncGenerator<AssistantStreamEvent>> {
     const conversation = await this.loadOwn(conversationId, user);
     assertWritable(conversation);
@@ -131,7 +172,7 @@ export class AssistantService {
     const model = this.llm.model(); // 503 if not configured
 
     await this.prisma.conversationMessage.create({
-      data: { conversationId, role: 'user', content },
+      data: { conversationId, role: 'user', content, externalId: options.externalId ?? null },
     });
 
     return (signal) => this.stream(conversation, content, model, user, ctx, signal);
@@ -173,6 +214,7 @@ export class AssistantService {
               ? conversation.changeRequest.pendingQuestions
               : [],
           today: new Date().toISOString().slice(0, 10),
+          channel: conversation.channel,
         }),
         messages: history,
         tools,
@@ -280,6 +322,16 @@ export class AssistantService {
         },
       }),
     };
+
+    if (conversation.channel === 'WHATSAPP') {
+      tools['ask_screen'] = tool({
+        description:
+          'WhatsApp only: show the user a list of app screens to pick which part of the app the change is about.',
+        inputSchema: z.object({}),
+        execute: () =>
+          Promise.resolve({ status: 'screen list shown to the user; wait for the choice' }),
+      });
+    }
 
     for (const name of Object.keys(dataToolSchemas) as DataToolName[]) {
       tools[name] = tool({

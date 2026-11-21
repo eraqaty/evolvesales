@@ -1,0 +1,11 @@
+# ngrok Traffic Policy: expose ONLY the WhatsApp webhook of the local API (§19.7).
+# Every other path or method gets a 404 at ngrok's edge and never reaches your machine.
+# Use with:  ngrok http 3000 --url https://<your-static-domain> --traffic-policy-file tools/ngrok/whatsapp-only.yml
+on_http_request:
+  - expressions:
+      - "req.url.path != '/api/v1/webhooks/whatsapp' || !(req.method in ['GET', 'POST'])"
+    actions:
+      - type: custom-response
+        config:
+          status_code: 404
+          body: Not found

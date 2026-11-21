@@ -5,6 +5,7 @@ import { ChangeRequestListPage } from './features/change-requests/ChangeRequestL
 import { InvoiceDetailsPage } from './features/invoices/InvoiceDetailsPage';
 import { InvoiceEditorPage } from './features/invoices/InvoiceEditorPage';
 import { InvoiceListPage } from './features/invoices/InvoiceListPage';
+import { ProfilePage } from './features/profile/ProfilePage';
 import { AppLayout } from './layout/AppLayout';
 
 export const routes = [
@@ -20,6 +21,7 @@ export const routes = [
       { path: 'requests', element: <ChangeRequestListPage mode="requests" /> },
       { path: 'requests/:id', element: <ChangeRequestDetailPage /> },
       { path: 'approvals', element: <ChangeRequestListPage mode="approvals" /> },
+      { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <Navigate to="/invoices" replace /> },
     ],
   },

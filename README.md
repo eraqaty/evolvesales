@@ -5,7 +5,7 @@ language (web or WhatsApp); an AI agent analyses this repository and proposes a 
 approves; an isolated AI coding agent implements the change, runs the tests and opens a pull request
 for human review.
 
-> **Status:** Phase 2a (change requests, AI assistant, approvals) in review. Repository analysis
+> **Status:** Phase 2b (WhatsApp channel) in review; Phase 2a is merged. Repository analysis
 > (Phase 3) is not built yet, so every submitted request currently ends in **Failed — analysis agent
 > not configured**. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the full
 > architecture, security design and phase plan.
@@ -50,6 +50,20 @@ pnpm dev:web                # http://localhost:5173
    Approval authorizes coding only.
 5. Every status change is written to an append-only history and the audit log, notifies the people
    involved (bell icon) and updates open browsers live over Socket.IO.
+
+## WhatsApp (Phase 2b)
+
+Off unless `WHATSAPP_ENABLED=true`. Setup (Meta test number, ngrok, templates): [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md).
+
+- **Link a phone** on the **Profile** page (account menu): the page shows a code, and you send
+  `LINK <code>` to the bot _from that phone_. Unknown numbers get one fixed reply and never reach the AI.
+- Chat with the same assistant as the web drawer: data questions (read-only, as you), change requests
+  with a screen list and a **Submit request** button. Commands: `help`, `new`, `status`, `pending`, `cancel`.
+- **Approvers** get approval cards (Approve / Reject / Clarify). Approve asks for the 6-digit
+  **approval PIN** set on the Profile page (5 wrong PINs lock WhatsApp approvals for 30 minutes).
+  Buttons are signed, single-use and expire after 24 hours; decisions are audited with channel `WHATSAPP`.
+- Status, clarification and approval notifications go to WhatsApp too, per your Profile preferences;
+  after Meta's 24-hour window they use approved templates.
 
 Demo users (password = `SEED_USER_PASSWORD` from your `.env`):
 

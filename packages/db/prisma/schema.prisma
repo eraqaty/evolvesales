@@ -21,17 +21,28 @@ enum Role {
 }
 
 model User {
-  id               String    @id @default(uuid(7)) @db.Uuid
-  email            String    @unique
-  displayName      String    @map("display_name")
-  passwordHash     String    @map("password_hash")
-  roles            Role[]
-  isActive         Boolean   @default(true) @map("is_active")
-  failedLoginCount Int       @default(0) @map("failed_login_count")
-  lockedUntil      DateTime? @map("locked_until") @db.Timestamptz(3)
-  lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz(3)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                    String    @id @default(uuid(7)) @db.Uuid
+  email                 String    @unique
+  displayName           String    @map("display_name")
+  passwordHash          String    @map("password_hash")
+  roles                 Role[]
+  isActive              Boolean   @default(true) @map("is_active")
+  failedLoginCount      Int       @default(0) @map("failed_login_count")
+  lockedUntil           DateTime? @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt           DateTime? @map("last_login_at") @db.Timestamptz(3)
+  /// WhatsApp number in E.164 (+201001234567); recognised only once verified (§19.3).
+  phoneE164             String?   @unique @map("phone_e164")
+  phoneVerifiedAt       DateTime? @map("phone_verified_at") @db.Timestamptz(3)
+  /// argon2 hash of the 6-digit WhatsApp approval PIN.
+  approvalPinHash       String?   @map("approval_pin_hash")
+  pinFailedCount        Int       @default(0) @map("pin_failed_count")
+  pinLockedUntil        DateTime? @map("pin_locked_until") @db.Timestamptz(3)
+  /// WhatsApp notification preferences per event type (see NotificationPrefs in shared).
+  notificationPrefs     Json?     @map("notification_prefs")
+  /// Last message received from this user on WhatsApp: opens Meta's 24-hour free-form window.
+  whatsappLastInboundAt DateTime? @map("whatsapp_last_inbound_at") @db.Timestamptz(3)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   refreshTokens     RefreshToken[]
   invoicesCreated   Invoice[]      @relation("InvoiceCreatedBy")
@@ -40,11 +51,14 @@ model User {
   invoicesCancelled Invoice[]      @relation("InvoiceCancelledBy")
   auditLogs         AuditLog[]
 
-  changeRequests    ChangeRequest[]    @relation("CrRequester")
-  conversations     Conversation[]
-  approvalDecisions ApprovalDecision[]
-  statusTransitions StatusTransition[]
-  notifications     Notification[]
+  changeRequests     ChangeRequest[]     @relation("CrRequester")
+  conversations      Conversation[]
+  approvalDecisions  ApprovalDecision[]
+  statusTransitions  StatusTransition[]
+  notifications      Notification[]
+  phoneVerifications PhoneVerification[]
+  outboundMessages   OutboundMessage[]
+  pendingActions     PendingAction[]
 
   @@map("users")
 }
@@ -216,25 +230,25 @@ enum CrPriority {
 }
 
 model ChangeRequest {
-  id              String     @id @default(uuid(7)) @db.Uuid
+  id               String     @id @default(uuid(7)) @db.Uuid
   /// CR-0001, from the change_request_key_seq sequence.
-  key             String     @unique
-  title           String
-  requesterId     String     @map("requester_id") @db.Uuid
-  screen          String
-  screenContext   Json?      @map("screen_context")
-  originalRequest String     @map("original_request")
+  key              String     @unique
+  title            String
+  requesterId      String     @map("requester_id") @db.Uuid
+  screen           String
+  screenContext    Json?      @map("screen_context")
+  originalRequest  String     @map("original_request")
   /// The validated ChangeRequestProposal the requester submitted.
-  structured      Json
-  status          CrStatus
-  priority        CrPriority @default(MEDIUM)
+  structured       Json
+  status           CrStatus
+  priority         CrPriority @default(MEDIUM)
   /// Questions from the approver (or analysis agent) waiting for the requester's answer.
-  pendingQuestions String[]  @default([]) @map("pending_questions")
-  baselineSha     String?    @map("baseline_sha")
-  branchName      String?    @map("branch_name")
-  currentPlanId   String?    @unique @map("current_plan_id") @db.Uuid
-  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  pendingQuestions String[]   @default([]) @map("pending_questions")
+  baselineSha      String?    @map("baseline_sha")
+  branchName       String?    @map("branch_name")
+  currentPlanId    String?    @unique @map("current_plan_id") @db.Uuid
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   requester     User                 @relation("CrRequester", fields: [requesterId], references: [id])
   currentPlan   ImplementationPlan?  @relation("CrCurrentPlan", fields: [currentPlanId], references: [id])
@@ -261,19 +275,19 @@ enum Channel {
 }
 
 model Conversation {
-  id              String             @id @default(uuid(7)) @db.Uuid
-  userId          String             @map("user_id") @db.Uuid
-  changeRequestId String?            @map("change_request_id") @db.Uuid
-  channel         Channel            @default(WEB)
-  screen          String
-  screenContext   Json?              @map("screen_context")
-  status          ConversationStatus @default(OPEN)
+  id                   String             @id @default(uuid(7)) @db.Uuid
+  userId               String             @map("user_id") @db.Uuid
+  changeRequestId      String?            @map("change_request_id") @db.Uuid
+  channel              Channel            @default(WEB)
+  screen               String
+  screenContext        Json?              @map("screen_context")
+  status               ConversationStatus @default(OPEN)
   /// Latest validated proposal from the assistant (shown as the summary card).
-  proposal        Json?
+  proposal             Json?
   /// Latest ask_clarification questions from the assistant.
-  pendingClarification Json?         @map("pending_clarification")
-  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  pendingClarification Json?              @map("pending_clarification")
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   user          User                  @relation(fields: [userId], references: [id])
   changeRequest ChangeRequest?        @relation(fields: [changeRequestId], references: [id])
@@ -297,6 +311,8 @@ model ConversationMessage {
   content        String
   /// Tool calls, token usage, model id.
   metadata       Json?
+  /// WhatsApp message id (wamid) for messages that arrived or left through WhatsApp.
+  externalId     String?     @unique @map("external_id")
   createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -417,19 +433,124 @@ model AgentJob {
 }
 
 model Notification {
-  id        String    @id @default(uuid(7)) @db.Uuid
-  userId    String    @map("user_id") @db.Uuid
-  type      String
-  title     String
-  body      String
-  link      String?
-  readAt    DateTime? @map("read_at") @db.Timestamptz(3)
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                String    @id @default(uuid(7)) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  type              String
+  title             String
+  body              String
+  link              String?
+  readAt            DateTime? @map("read_at") @db.Timestamptz(3)
+  /// Set when the WhatsApp dispatcher claimed this notification (sent, skipped or failed).
+  whatsappHandledAt DateTime? @map("whatsapp_handled_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt])
   @@map("notifications")
+}
+
+// ───────────────────────────── WhatsApp channel (§19) ─────────────────────────────
+
+/// A pending phone link: the user must send "LINK <code>" from phoneE164 before expiresAt.
+model PhoneVerification {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  phoneE164  String    @map("phone_e164")
+  /// SHA-256 of the 6-digit code.
+  codeHash   String    @map("code_hash")
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([phoneE164])
+  @@index([userId])
+  @@map("phone_verifications")
+}
+
+/// Every webhook message from Meta, stored before processing. The unique wamid makes retries idempotent.
+model InboundChannelEvent {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  waMessageId String    @unique @map("wa_message_id")
+  fromPhone   String    @map("from_phone")
+  type        String
+  payload     Json
+  receivedAt  DateTime  @default(now()) @map("received_at") @db.Timestamptz(3)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
+  error       String?
+
+  @@map("inbound_channel_events")
+}
+
+enum OutboundKind {
+  TEXT
+  INTERACTIVE
+  TEMPLATE
+}
+
+enum OutboundStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+model OutboundMessage {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  /// wamid returned by the Graph API; delivery statuses are matched on it.
+  waMessageId    String?        @unique @map("wa_message_id")
+  userId         String?        @map("user_id") @db.Uuid
+  toPhone        String         @map("to_phone")
+  kind           OutboundKind
+  template       String?
+  /// Short description of what was sent (no secrets, no full message bodies).
+  summary        String
+  notificationId String?        @map("notification_id") @db.Uuid
+  status         OutboundStatus @default(PENDING)
+  error          String?
+  sentAt         DateTime?      @map("sent_at") @db.Timestamptz(3)
+  deliveredAt    DateTime?      @map("delivered_at") @db.Timestamptz(3)
+  readAt         DateTime?      @map("read_at") @db.Timestamptz(3)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@map("outbound_messages")
+}
+
+enum PendingActionStage {
+  /// The approval card was sent; waiting for a button tap.
+  CARD
+  AWAITING_PIN
+  AWAITING_REASON
+  AWAITING_QUESTIONS
+}
+
+/// One approval card sent on WhatsApp. Its buttons carry an HMAC-signed reference to this row;
+/// it can be used once, expires after 24 hours and is refused if the plan version changed.
+model PendingAction {
+  id              String             @id @default(uuid(7)) @db.Uuid
+  nonce           String
+  userId          String             @map("user_id") @db.Uuid
+  changeRequestId String             @map("change_request_id") @db.Uuid
+  planVersion     Int                @map("plan_version")
+  /// approve | reject | clarify once a button was tapped.
+  action          String?
+  stage           PendingActionStage @default(CARD)
+  stageExpiresAt  DateTime?          @map("stage_expires_at") @db.Timestamptz(3)
+  expiresAt       DateTime           @map("expires_at") @db.Timestamptz(3)
+  consumedAt      DateTime?          @map("consumed_at") @db.Timestamptz(3)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, stage])
+  @@map("pending_actions")
 }
 
 // ───────────────────────────── Audit ─────────────────────────────
