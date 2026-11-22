@@ -3,6 +3,8 @@ export const QUEUE = {
   Analyze: 'cr-analyze',
   /** Inbound WhatsApp messages, consumed by the API's channel worker (§19.2). */
   WhatsAppInbound: 'whatsapp-inbound',
+  /** Refresh the GitHub App's repository list; published by the API, run by the Orchestrator. */
+  RepoSync: 'github-repo-sync',
 } as const;
 export type QueueName = (typeof QUEUE)[keyof typeof QUEUE];
 
@@ -15,6 +17,11 @@ export interface AnalyzeJobData {
 export interface WhatsAppInboundJobData {
   /** InboundChannelEvent id. */
   eventId: string;
+}
+
+export interface RepoSyncJobData {
+  /** User who asked for the refresh (audit). */
+  requestedById: string;
 }
 
 /** pg-boss stores its tables in this schema of the same database. */

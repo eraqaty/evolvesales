@@ -52,6 +52,7 @@ export class RealtimeGateway implements OnGatewayConnection {
     this.server.to(rooms).emit(event.type, {
       changeRequestId: event.changeRequestId,
       status: event.status,
+      ...(event.jobId && { jobId: event.jobId }),
     });
     if (event.type === 'cr.updated' && event.userIds.length > 0) {
       // Recipients of new notification rows refresh their bell.

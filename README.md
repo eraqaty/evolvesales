@@ -5,9 +5,10 @@ language (web or WhatsApp); an AI agent analyses this repository and proposes a 
 approves; an isolated AI coding agent implements the change, runs the tests and opens a pull request
 for human review.
 
-> **Status:** Phase 2b (WhatsApp channel) in review; Phase 2a is merged. Repository analysis
-> (Phase 3) is not built yet, so every submitted request currently ends in **Failed — analysis agent
-> not configured**. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the full
+> **Status:** Phase 3 (repository analysis) in review; Phases 1, 2a and 2b are merged. A submitted
+> request is analysed only once the GitHub App, the Anthropic key, the runner image and the spend caps
+> are set up ([docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md)); until then it ends in **Failed**
+> with the reason. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the full
 > architecture, security design and phase plan.
 
 ## Stack
@@ -64,6 +65,31 @@ Off unless `WHATSAPP_ENABLED=true`. Setup (Meta test number, ngrok, templates): 
   Buttons are signed, single-use and expire after 24 hours; decisions are audited with channel `WHATSAPP`.
 - Status, clarification and approval notifications go to WhatsApp too, per your Profile preferences;
   after Meta's 24-hour window they use approved templates.
+
+## Repository analysis (Phase 3)
+
+Setup (GitHub App, runner image, proxies, caps): [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md).
+
+- When a request is submitted, the Orchestrator does the following:
+  1. Checks the admin's **spend caps**. There are no defaults.
+  2. Resolves `main` of the one **authorized repository** to a baseline commit.
+  3. Starts a single-use **agent-runner** container: non-root, read-only, no capabilities, internal
+     network plus an allowlist egress proxy, with secrets on stdin only.
+  4. The Claude Agent SDK, limited to Read/Grep/Glob inside a read-only checkout, writes a plan.
+  5. The **PlanVerifier** checks every cited excerpt against GitHub at that commit.
+  6. The request moves to **Awaiting approval**, or to **Clarification required** if the agent asked
+     questions.
+- **Agents** page (admins): spend caps, and which repository the agents may use.
+- **Request → Timeline:** a live log of each agent job, and its cost.
+- **Request → Plan:** the verified plan.
+
+```bash
+pnpm agents:up
+```
+
+```bash
+pnpm runner:build
+```
 
 Demo users (password = `SEED_USER_PASSWORD` from your `.env`):
 

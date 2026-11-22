@@ -17,6 +17,7 @@ import {
   IconFileInvoice,
   IconGitPullRequest,
   IconLogout,
+  IconRobot,
   IconSparkles,
   IconUserCircle,
 } from '@tabler/icons-react';
@@ -72,7 +73,7 @@ function RequestChangeButton() {
 
 function Shell() {
   const { state, logout } = useAuth();
-  const { isApprover } = usePermissions();
+  const { isApprover, isAdmin } = usePermissions();
   const location = useLocation();
   if (!state.user) return null;
   const user = state.user;
@@ -152,6 +153,15 @@ function Shell() {
             label="Approvals"
             leftSection={<IconChecklist size={18} />}
             active={location.pathname.startsWith('/approvals')}
+          />
+        )}
+        {isAdmin && (
+          <NavLink
+            component={RouterLink}
+            to="/admin/agents"
+            label="Agents"
+            leftSection={<IconRobot size={18} />}
+            active={location.pathname.startsWith('/admin')}
           />
         )}
         <Badge variant="light" color="gray" mt="auto" size="xs">

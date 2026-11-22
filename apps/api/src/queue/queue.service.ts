@@ -4,6 +4,7 @@ import {
   type AnalyzeJobData,
   QUEUE,
   QUEUE_SCHEMA,
+  type RepoSyncJobData,
   type WhatsAppInboundJobData,
 } from '@evolvesales/shared';
 import { fromPrisma, PgBoss } from 'pg-boss';
@@ -50,6 +51,14 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   /** Enqueue repository analysis for a change request, atomically with `tx`. */
   async enqueueAnalyze(tx: Prisma.TransactionClient, data: AnalyzeJobData): Promise<string | null> {
     return this.boss.send(QUEUE.Analyze, { ...data }, { db: fromPrisma(tx) });
+  }
+
+  /** Asks the Orchestrator (which holds the GitHub App key) to refresh the repository list. */
+  async enqueueRepoSync(
+    tx: Prisma.TransactionClient,
+    data: RepoSyncJobData,
+  ): Promise<string | null> {
+    return this.boss.send(QUEUE.RepoSync, { ...data }, { db: fromPrisma(tx) });
   }
 
   /** Enqueue an inbound WhatsApp message for the channel worker, atomically with `tx`. */

@@ -1,8 +1,8 @@
-# Local development stack. Phase 0 runs only PostgreSQL; api, orchestrator, web,
-# egress-proxy and docker-socket-proxy services are added in later phases.
+# Local development stack. api, orchestrator and web run on the host (pnpm dev:*).
 #
 #   cp .env.example .env      # then set POSTGRES_PASSWORD
-#   pnpm db:up
+#   pnpm db:up                # PostgreSQL
+#   pnpm agents:up            # egress-proxy + docker-socket-proxy (agent jobs, Phase 3)
 name: evolvesales-dev
 
 services:
@@ -24,6 +24,54 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # The agent containers' only way out (§9): HTTPS tunnels to allowlisted hosts.
+  # It is the one service on both the internal agent network and a normal network.
+  egress-proxy:
+    profiles: ['agents']
+    image: node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee
+    restart: unless-stopped
+    command: ['node', '/proxy/src/proxy.ts']
+    environment:
+      EGRESS_PROXY_MAIN: '1'
+      PORT: '3128'
+      # Empty = the default allowlist in apps/egress-proxy/src/proxy.ts.
+      EGRESS_ALLOWLIST: ${EGRESS_ALLOWLIST:-}
+    volumes:
+      - ../apps/egress-proxy:/proxy:ro
+    user: '1000:1000'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    networks:
+      agent-net:
+        aliases: [egress-proxy]
+      egress: {}
+
+  # The Orchestrator's restricted view of Docker (rules in docker-socket-proxy/).
+  docker-socket-proxy:
+    profiles: ['agents']
+    image: tecnativa/docker-socket-proxy@sha256:be1ac64f33bd82043beb504822a17ba6b71668ea1ad7cf51a9a01d27bb7ab047
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: info
+      DISABLE_IPV6: '1'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker-socket-proxy/haproxy.cfg.template:/usr/local/etc/haproxy/haproxy.cfg.template:ro
+    ports:
+      # Bound to localhost only: the Orchestrator on the host is the only client.
+      - '127.0.0.1:2375:2375'
+    security_opt: ['no-new-privileges:true']
+    networks: [egress]
+
+networks:
+  # internal: no route to the host or the internet; only egress-proxy is reachable.
+  agent-net:
+    name: evolvesales-agent-net
+    internal: true
+  egress:
+    name: evolvesales-egress
 
 volumes:
   postgres-data:

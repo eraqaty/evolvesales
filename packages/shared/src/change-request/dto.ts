@@ -46,6 +46,8 @@ export interface AgentJobDto {
   agentKind: string | null;
   model: string | null;
   error: string | null;
+  /** Estimated AI cost of the job in USD (4 decimals), when known. */
+  costUsd: string | null;
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
@@ -120,9 +122,11 @@ export type AssistantStreamEvent =
 
 /** Realtime events published over Postgres NOTIFY and relayed to browsers via Socket.IO. */
 export interface RealtimeEvent {
-  type: 'cr.updated' | 'notification';
+  type: 'cr.updated' | 'notification' | 'job.log' | 'repos.updated';
   changeRequestId?: string;
   status?: CrStatus;
+  /** For `job.log`: the agent job whose log grew (clients re-fetch new lines). */
+  jobId?: string;
   /** Users to notify directly. */
   userIds: string[];
   /** Roles whose members should refresh their lists. */

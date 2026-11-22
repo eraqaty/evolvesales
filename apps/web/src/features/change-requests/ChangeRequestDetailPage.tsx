@@ -1,9 +1,9 @@
 import {
+  Accordion,
   Alert,
   Anchor,
   Badge,
   Button,
-  Code,
   Group,
   List,
   Loader,
@@ -28,6 +28,8 @@ import { useScreenContext } from '../../lib/screen-context';
 import { useAssistant } from '../assistant/AssistantContext';
 import { useApprove, useChangeRequest, useClarify, useReject, useRetry } from './api';
 import { CrStatusBadge, formatDateTime } from './CrStatusBadge';
+import { JobLogViewer } from './JobLogViewer';
+import { PlanView } from './PlanView';
 
 type Dialog = 'approve' | 'reject' | 'clarify' | 'retry' | null;
 
@@ -201,7 +203,7 @@ function PlanPanel({ cr }: { cr: ChangeRequestDetailDto }) {
         {selected.verifiedCount} verified / {selected.assumptionCount} assumptions · by{' '}
         {selected.agent ?? 'unknown agent'}
       </Text>
-      <Code block>{JSON.stringify(selected.plan, null, 2)}</Code>
+      <PlanView plan={selected.plan} />
     </Stack>
   );
 }
@@ -245,6 +247,7 @@ function TimelinePanel({ cr }: { cr: ChangeRequestDetailDto }) {
                 <Table.Th>Status</Table.Th>
                 <Table.Th>Agent</Table.Th>
                 <Table.Th>Started</Table.Th>
+                <Table.Th>Cost (USD)</Table.Th>
                 <Table.Th>Error</Table.Th>
               </Table.Tr>
             </Table.Thead>
@@ -259,6 +262,7 @@ function TimelinePanel({ cr }: { cr: ChangeRequestDetailDto }) {
                   </Table.Td>
                   <Table.Td>{j.agentKind ?? '—'}</Table.Td>
                   <Table.Td>{j.startedAt ? formatDateTime(j.startedAt) : '—'}</Table.Td>
+                  <Table.Td>{j.costUsd ?? '—'}</Table.Td>
                   <Table.Td>
                     <Text size="xs" c="red">
                       {j.error}
@@ -268,6 +272,19 @@ function TimelinePanel({ cr }: { cr: ChangeRequestDetailDto }) {
               ))}
             </Table.Tbody>
           </Table>
+          <Accordion variant="contained" chevronPosition="left">
+            {cr.jobs.map((j) => (
+              <Accordion.Item key={j.id} value={j.id}>
+                <Accordion.Control>
+                  Log: {j.type} job{' '}
+                  {j.startedAt ? `started ${formatDateTime(j.startedAt)}` : '(queued)'}
+                </Accordion.Control>
+                <Accordion.Panel>
+                  <JobLogViewer crId={cr.id} jobId={j.id} running={j.status === 'RUNNING'} />
+                </Accordion.Panel>
+              </Accordion.Item>
+            ))}
+          </Accordion>
         </>
       )}
       {cr.decisions.length > 0 && (
