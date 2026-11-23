@@ -1,38 +1,38 @@
-/** Input for the repository analysis agent (§7). */
+import type { RunnerInput } from '@evolvesales/shared';
+import type { LogLevel, LogSource } from './job-log.writer.js';
+
+/** Everything one analysis needs (§7). The token is read-only and scoped to one repository. */
 export interface AnalysisRequest {
-  changeRequestId: string;
-  key: string;
-}
-
-/** Result of a completed analysis. The plan schema arrives with the agent in Phase 3. */
-export interface AnalysisOutcome {
-  plan: unknown;
+  jobId: string;
+  changeRequest: RunnerInput['changeRequest'];
+  repository: RunnerInput['repository'];
   baselineSha: string;
-  agent: string;
-  model: string;
+  githubToken: string;
+  maxBudgetUsd: number;
+  log: (level: LogLevel, source: LogSource, message: string) => void;
 }
 
-/** Thrown when no analysis agent is available; the job fails visibly instead of faking a plan. */
-export class AnalysisAgentNotConfiguredError extends Error {
-  constructor() {
-    super(
-      'Analysis agent not configured: repository analysis arrives in Phase 3 ' +
-        '(GitHub App + isolated agent container). No plan was produced.',
-    );
-    this.name = 'AnalysisAgentNotConfiguredError';
-  }
+export interface AnalysisUsage {
+  inputTokens: number;
+  outputTokens: number;
 }
+
+interface Common {
+  agent: string;
+  model: string | null;
+  usage: AnalysisUsage | null;
+  costUsd: number | null;
+  containerId: string | null;
+  imageDigest: string | null;
+}
+
+export type AnalysisOutcome =
+  | (Common & { ok: true; plan: unknown; headSha: string; numTurns: number })
+  | (Common & { ok: false; error: string; timedOut: boolean });
 
 export abstract class AnalysisAgent {
   abstract readonly kind: string;
+  /** Why the agent can't run right now (missing key, image…), or null when it is ready. */
+  abstract notReadyReason(): string | null;
   abstract analyze(request: AnalysisRequest): Promise<AnalysisOutcome>;
-}
-
-/** Phase 2 implementation: always reports that it is not configured. */
-export class NotConfiguredAnalysisAgent extends AnalysisAgent {
-  readonly kind = 'none';
-
-  analyze(): Promise<AnalysisOutcome> {
-    return Promise.reject(new AnalysisAgentNotConfiguredError());
-  }
 }

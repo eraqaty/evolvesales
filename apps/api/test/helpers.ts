@@ -69,7 +69,7 @@ export async function createTestApp(
 
 export async function resetDatabase(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "notifications", "agent_jobs", "status_transitions", "approval_decisions", ' +
+    'TRUNCATE "job_logs", "repositories", "agent_settings", "notifications", "agent_jobs", "status_transitions", "approval_decisions", ' +
       '"implementation_plans", "conversation_messages", "pending_actions", "outbound_messages", ' +
       '"inbound_channel_events", "phone_verifications", "conversations", "change_requests", ' +
       '"invoice_items", "invoices", "invoice_sequences", "products", "customers", ' +
@@ -77,7 +77,7 @@ export async function resetDatabase(prisma: PrismaService): Promise<void> {
   );
   await prisma.$executeRawUnsafe('ALTER SEQUENCE "change_request_key_seq" RESTART WITH 1');
   await prisma.$executeRawUnsafe(
-    `DELETE FROM pgboss.job WHERE name IN ('cr-analyze', 'whatsapp-inbound')`,
+    `DELETE FROM pgboss.job WHERE name IN ('cr-analyze', 'whatsapp-inbound', 'github-repo-sync')`,
   );
 }
 

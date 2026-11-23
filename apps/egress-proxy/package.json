@@ -1,0 +1,12 @@
+{
+  "name": "@evolvesales/egress-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Allowlist HTTPS (CONNECT) proxy: the agent containers' only way out (§9)",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}

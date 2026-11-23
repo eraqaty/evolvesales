@@ -10,3 +10,7 @@ export * from './change-request/schemas.js';
 export * from './change-request/dto.js';
 export * from './jobs.js';
 export * from './whatsapp.js';
+export * from './agent/plan.js';
+export * from './agent/runner-protocol.js';
+export * from './agent/settings.js';
+export * from './agent/dto.js';

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AgentsModule } from './agents/agents.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -26,6 +27,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module.js';
     SalesModule,
     QueueModule,
     ChangeRequestsModule,
+    AgentsModule,
     AssistantModule,
     NotificationsModule,
     ProfileModule,

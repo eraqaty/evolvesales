@@ -118,4 +118,129 @@ describe('change request detail', () => {
     expect(alert).toHaveTextContent('Analysis agent not configured');
     expect(screen.getByRole('tab', { name: 'Plan (0)' })).toBeInTheDocument();
   });
+
+  it('shows the verified plan readably and the agent job log', async () => {
+    const path = 'apps/web/src/features/invoices/InvoiceListPage.tsx';
+    const plan = {
+      originalRequest: 'Export please',
+      technicalInterpretation: 'Add an XLSX export of the filtered invoice list',
+      proposedImplementation: [{ step: 1, description: 'Add an Export button to the toolbar' }],
+      affectedComponents: [
+        {
+          layer: 'frontend',
+          path,
+          change: 'modify',
+          reason: 'Toolbar lives here',
+          verified: true,
+          evidence: { path, startLine: 10, endLine: 12, excerpt: '<Button>New invoice</Button>' },
+        },
+        {
+          layer: 'backend',
+          path: 'apps/api/src/sales/x.ts',
+          change: 'modify',
+          reason: 'Guessed',
+          verified: false,
+          verificationNote: 'apps/api/src/sales/x.ts does not exist at the baseline commit',
+        },
+      ],
+      databaseChanges: { required: false, migrations: [], dataImpact: '' },
+      newDependencies: [{ name: 'exceljs', version: '4.4.0', justification: 'Write XLSX files' }],
+      testRequirements: [
+        { type: 'unit', description: 'Button renders', path: 'apps/web/src/x.test.tsx' },
+      ],
+      risks: [
+        {
+          category: 'performance',
+          description: 'Large exports',
+          severity: 'medium',
+          mitigation: 'Cap rows',
+        },
+      ],
+      complexity: { level: 'M', rationale: 'API + UI', estimatedFilesChanged: 6 },
+      acceptanceCriteria: ['Downloads the filtered rows'],
+      assumptions: ['Unverified finding for apps/api/src/sales/x.ts: does not exist'],
+      blockingQuestions: [],
+      verification: {
+        baselineSha: 'abc1234'.padEnd(40, '0'),
+        checkedAt: '2026-11-22T10:00:00.000Z',
+        verifiedCount: 1,
+        downgraded: [{ path: 'apps/api/src/sales/x.ts', reason: 'does not exist' }],
+      },
+    };
+    mockApi({
+      ...base,
+      'POST /api/v1/auth/refresh': { body: approverSession },
+      'GET /api/v1/change-requests/cr-1': {
+        body: detail({
+          plans: [
+            {
+              id: 'p-1',
+              version: 1,
+              baselineSha: 'abc1234'.padEnd(40, '0'),
+              plan,
+              verifiedCount: 1,
+              assumptionCount: 1,
+              agent: 'claude-agent-sdk',
+              model: 'claude-opus-5-5',
+              createdAt: '2026-11-22T10:00:00.000Z',
+            },
+          ],
+          jobs: [
+            {
+              id: 'j-1',
+              type: 'ANALYZE',
+              status: 'SUCCEEDED',
+              agentKind: 'claude-agent-sdk',
+              model: 'claude-opus-5-5',
+              error: null,
+              costUsd: '0.4321',
+              startedAt: '2026-11-22T09:58:00.000Z',
+              finishedAt: '2026-11-22T10:00:00.000Z',
+              createdAt: '2026-11-22T09:58:00.000Z',
+            },
+          ],
+        }),
+      },
+      'GET /api/v1/change-requests/cr-1/jobs/j-1/logs': {
+        body: {
+          jobId: 'j-1',
+          status: 'SUCCEEDED',
+          lastSeq: 1,
+          lines: [
+            {
+              seq: 0,
+              level: 'INFO',
+              source: 'agent',
+              message: 'Read AGENTS.md',
+              createdAt: '2026-11-22T09:58:01.000Z',
+            },
+            {
+              seq: 1,
+              level: 'WARN',
+              source: 'runner',
+              message: 'denied Bash',
+              createdAt: '2026-11-22T09:58:02.000Z',
+            },
+          ],
+        },
+      },
+    });
+    renderRoute('/requests/cr-1');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('tab', { name: 'Plan (1)' }));
+    expect(
+      await screen.findByText('Add an XLSX export of the filtered invoice list'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('L10-12')).toBeInTheDocument();
+    expect(screen.getByText('unverified')).toBeInTheDocument();
+    expect(screen.getByText(/1 finding\(s\) could not be verified/)).toBeInTheDocument();
+    expect(screen.getByText('exceljs@4.4.0')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Timeline' }));
+    expect(screen.getByText('0.4321')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Log: ANALYZE job/ }));
+    expect(await screen.findByText(/\[agent\] Read AGENTS.md/)).toBeInTheDocument();
+    expect(screen.getByText(/\[runner\] denied Bash/)).toBeInTheDocument();
+  });
 });

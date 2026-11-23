@@ -1,7 +1,8 @@
 # EvolveSales — Detailed Implementation Plan (NestJS edition)
 
-> Status: **DRAFT — awaiting approval. No application code has been written.**
-> Date: 2026-11-19
+> Status: **Approved 2026-11-19; being built phase by phase.** Phases 0–2b merged; Phase 3 in review
+> (PR #4) as of 2026-11-23. Current state and next steps: [HANDOFF.md](../HANDOFF.md).
+> Originally drafted: 2026-11-19
 
 ---
 
@@ -571,10 +572,70 @@ AI-written PR code **never runs on the self-hosted runner**.
 
 ### Phase 3: Repository analysis
 
-- [ ] GitHub App auth service, repository authorization page
-- [ ] agent-runner image (analyze mode), egress proxy, docker-socket-proxy, DockerLauncher with limits
-- [ ] Claude analysis agent + Codex alternative; plan schema; PlanVerifier; log streaming
-- **Exit:** a real CR produces a real plan that cites real files in `eraqaty/evolvesales` at a recorded SHA; container gone afterwards (verified with `docker ps -a`). _(Needs Docker running, App credentials, AI key.)_
+- [x] GitHub App auth service, repository authorization page
+- [x] agent-runner image (analyze mode), egress proxy, docker-socket-proxy, DockerLauncher with limits
+- [x] Claude analysis agent; plan schema; PlanVerifier; log streaming _(Codex alternative deferred, see decisions)_
+- **Exit:** a real CR produces a real plan that cites real files in `eraqaty/evolvesales` at a recorded SHA; container gone afterwards (verified with `docker ps -a`). _(Needs Docker running, App credentials, AI key.)_ **Not run yet:** it needs the GitHub App (P3) and an Anthropic key.
+
+**Phase 3 decisions (2026-11-22)**
+
+- **GitHub App:** not created yet. Phase 3 ships `docs/GITHUB_APP_SETUP.md` and is built and tested against a fake GitHub API; the live exit runs once you have created and installed the App (P3).
+- **Spend caps:** no built-in defaults (§0 wins over the "$5 default" in §14). Analyze jobs refuse to start until an admin sets the per-job and daily caps on the Agent settings page.
+- **Agents:** Claude only in Phase 3, behind the existing `AnalysisAgent` interface. The Codex alternative is deferred until an OpenAI key is available to verify it.
+- **Runner image:** built locally and pinned by digest for Phase 3; building it in CI moves to Phase 5.
+
+**Phase 3 implementation notes (2026-11-22)**
+
+- **Secrets go to the runner on stdin**, not in a mounted secret file (§7 step 3, §9).
+  - The Orchestrator writes one JSON line `{input, secrets}`; nothing secret is in env, labels or `docker inspect`, and no volume or host path is involved.
+  - The runner writes the GitHub token to its tmpfs only for `git fetch`, where a credential helper reads it, and then deletes it.
+  - The runner reads one line and stops. The Orchestrator never half-closes the stream, because on a Windows named pipe that also closes the output (found by the Docker tests).
+- **Results come back as JSON lines on stdout**, not through a per-job `/out` volume.
+  - Each log line goes to `job_logs` live.
+  - The last `result` event carries the plan; the Orchestrator validates it again.
+  - Output is capped at 8 MB per job.
+- **Checkout:**
+  - `git fetch --depth 1` of the exact baseline SHA, with hooks, file transport, submodules and redirects disabled.
+  - HEAD must equal the baseline.
+  - Then `.git` and all symlinks are deleted, and the tree is made read-only.
+  - The Orchestrator also rejects a plan whose reported commit differs from the baseline.
+- **Agent:**
+  - The Claude Agent SDK runs with `tools` and `allowedTools` set to Read/Grep/Glob, with Bash, Write, Edit, Web, Task and Skill also listed as disallowed.
+  - `permissionMode: 'dontAsk'`.
+  - A `PreToolUse` hook enforces the path guard, resolving symlinks, outside `/workspace/repo`. A `canUseTool` callback isn't called for every call, so a hook is used instead.
+  - `settingSources: []` and no MCP servers, so repository `.claude/` settings, hooks and `CLAUDE.md` are ignored.
+  - `maxTurns` 40, `maxBudgetUsd` = the job's cap, output forced to the plan JSON schema.
+  - The subprocess gets an explicit, minimal environment. The default model is `claude-opus-5-5` (`AGENT_ANALYZE_MODEL`).
+- **PlanVerifier:**
+  - A component is verified only if its cited excerpt appears in the file at the baseline, within ±10 lines, ignoring indentation and blank lines.
+  - A `modify` or `delete` component must name an existing file; an `add` component must name a new one.
+  - Failed claims are downgraded, explained per component, and added to the assumptions.
+- **Egress proxy:**
+  - `apps/egress-proxy` is a small Node CONNECT proxy with no dependencies, used instead of Squid.
+  - It allows only port 443 to allowlisted host names; IP literals and plain HTTP are refused.
+  - It logs one JSON line per decision.
+- **docker-socket-proxy:** the image's default rules would allow `exec`, `archive`, `export` and `update` on any container, so a custom rule file (`deploy/docker-socket-proxy/`) allows only the 8 calls the launcher makes.
+- **Spend caps:**
+  - They live in the `agent_settings` table and are edited on the admin **Agents** page; there is no env fallback.
+  - The daily window is the UTC day.
+  - In-flight jobs count with their full cap, and the budget decision is serialised with an advisory lock.
+- **Repositories:**
+  - The API holds no GitHub credentials. The Orchestrator syncs the App's installation repositories into `repositories` (at start-up, every 30 minutes, and on the admin's "Refresh", queue `github-repo-sync`).
+  - A repository the App loses access to is de-authorized.
+  - Exactly one repository may be authorized in the MVP.
+- **Image pinning:**
+  - In development, `AGENT_RUNNER_IMAGE` may be a tag. The launcher inspects it, runs it by image ID and records the digest on the job.
+  - In production, the configuration requires `…@sha256:` (checked at boot).
+- **Clarification:** when the agent returns blocking questions, the plan is stored and the request goes to `CLARIFICATION_REQUIRED` with those questions, reusing the Phase 2 answer flow.
+- **Reaper:** at start-up, the Orchestrator removes leftover runner containers and fails jobs that were RUNNING, assuming a single Orchestrator instance.
+- **Tests:**
+  - Unit tests: plan schema, budget rule, redaction, path guard, agent options, container options, verifier, config.
+  - Orchestrator integration tests: real PostgreSQL, a fake GitHub API and a stand-in agent.
+  - Real-Docker tests (`*.docker-spec.ts`, also run in CI):
+    - lockdown, timeout, removal and the reaper;
+    - the full launcher through docker-socket-proxy with its refusals;
+    - with the local stack up (skipped in CI): no direct route out, the allowlist, and the real runner image cloning `main` through the proxy.
+  - API and web tests for the Agents page, job logs and the plan view.
 
 ### Phase 4: Coding agent
 

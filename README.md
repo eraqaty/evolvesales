@@ -5,10 +5,12 @@ language (web or WhatsApp); an AI agent analyses this repository and proposes a 
 approves; an isolated AI coding agent implements the change, runs the tests and opens a pull request
 for human review.
 
-> **Status:** Phase 2b (WhatsApp channel) in review; Phase 2a is merged. Repository analysis
-> (Phase 3) is not built yet, so every submitted request currently ends in **Failed — analysis agent
-> not configured**. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the full
-> architecture, security design and phase plan.
+> **Status:** Phase 3 (repository analysis) in review; Phases 1, 2a and 2b are merged. A submitted
+> request is analysed only once the GitHub App, the Anthropic key, the runner image and the spend caps
+> are set up ([docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md)); until then it ends in **Failed**
+> with the reason. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the full
+> architecture, security design and phase plan, and [HANDOFF.md](HANDOFF.md) for the current work in
+> progress and next steps.
 
 ## Stack
 
@@ -35,6 +37,17 @@ pnpm dev:api                # http://localhost:3000/api/v1/health  (Swagger: /ap
 pnpm dev:orchestrator       # job worker (health: http://localhost:3001/health)
 pnpm dev:web                # http://localhost:5173
 ```
+
+Credentials you add yourself to `.env` (never commit them):
+
+| Variable(s)                                                                    | Where to get it                                                                                                   | Needed for                   |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `POSTGRES_PASSWORD`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `SEED_USER_PASSWORD` | choose locally (the JWT secret: `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`) | everything                   |
+| `ANTHROPIC_API_KEY`                                                            | Anthropic Console → API keys (a dedicated key with a spend limit)                                                 | AI assistant, analysis agent |
+| `WHATSAPP_*`, `NGROK_DOMAIN`                                                   | Meta for Developers, ngrok dashboard: [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md)                            | WhatsApp channel             |
+| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH`                                 | your GitHub App: [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md)                                             | repository analysis          |
+
+Every variable name, with its default, is listed in [.env.example](.env.example).
 
 ## Change requests (Phase 2a)
 
@@ -65,6 +78,31 @@ Off unless `WHATSAPP_ENABLED=true`. Setup (Meta test number, ngrok, templates): 
 - Status, clarification and approval notifications go to WhatsApp too, per your Profile preferences;
   after Meta's 24-hour window they use approved templates.
 
+## Repository analysis (Phase 3)
+
+Setup (GitHub App, runner image, proxies, caps): [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md).
+
+- When a request is submitted, the Orchestrator does the following:
+  1. Checks the admin's **spend caps**. There are no defaults.
+  2. Resolves `main` of the one **authorized repository** to a baseline commit.
+  3. Starts a single-use **agent-runner** container: non-root, read-only, no capabilities, internal
+     network plus an allowlist egress proxy, with secrets on stdin only.
+  4. The Claude Agent SDK, limited to Read/Grep/Glob inside a read-only checkout, writes a plan.
+  5. The **PlanVerifier** checks every cited excerpt against GitHub at that commit.
+  6. The request moves to **Awaiting approval**, or to **Clarification required** if the agent asked
+     questions.
+- **Agents** page (admins): spend caps, and which repository the agents may use.
+- **Request → Timeline:** a live log of each agent job, and its cost.
+- **Request → Plan:** the verified plan.
+
+```bash
+pnpm agents:up
+```
+
+```bash
+pnpm runner:build
+```
+
 Demo users (password = `SEED_USER_PASSWORD` from your `.env`):
 
 | Email                        | Role            | Can                                                 |
@@ -89,7 +127,7 @@ Demo users (password = `SEED_USER_PASSWORD` from your `.env`):
 
 ```bash
 pnpm verify      # format check, lint, typecheck, unit tests, build
-pnpm test:e2e    # API HTTP tests
+pnpm test:e2e    # API HTTP tests, Orchestrator integration tests and real-Docker tests
 ```
 
 CI runs the same checks on every pull request ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
@@ -100,6 +138,9 @@ CI runs the same checks on every pull request ([.github/workflows/ci.yml](.githu
 apps/api            NestJS HTTP API
 apps/orchestrator   NestJS always-on worker
 apps/web            React frontend
+apps/agent-runner   Code inside the single-use agent container (Dockerfile)
+apps/egress-proxy   Allowlist HTTPS proxy for agent containers
+packages/db         Prisma schema, migrations, seed
 packages/shared     Shared types and business logic
 deploy/             Docker Compose and infrastructure
 docs/               Plan and design documents

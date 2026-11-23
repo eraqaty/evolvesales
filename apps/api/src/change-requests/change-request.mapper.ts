@@ -100,6 +100,7 @@ export function toCrDetailDto(
       agentKind: j.agentKind,
       model: j.model,
       error: j.error,
+      costUsd: j.costUsd === null ? null : j.costUsd.toFixed(4),
       startedAt: isoOrNull(j.startedAt),
       finishedAt: isoOrNull(j.finishedAt),
       createdAt: iso(j.createdAt),

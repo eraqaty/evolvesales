@@ -35,6 +35,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         });
       }
     });
+    socket.on('job.log', (event: { jobId?: string }) => {
+      if (event.jobId) void queryClient.invalidateQueries({ queryKey: ['job-logs', event.jobId] });
+    });
+    socket.on('repos.updated', () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'repositories'] });
+    });
     socket.on('notification', () => {
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });

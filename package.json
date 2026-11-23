@@ -23,7 +23,10 @@
     "db:down": "docker compose --env-file .env -f deploy/compose.dev.yml down",
     "db:migrate": "pnpm --filter @evolvesales/db migrate:deploy",
     "db:seed": "pnpm --filter @evolvesales/db seed",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "agents:up": "docker compose --env-file .env -f deploy/compose.dev.yml --profile agents up -d egress-proxy docker-socket-proxy",
+    "agents:down": "docker compose --env-file .env -f deploy/compose.dev.yml --profile agents stop egress-proxy docker-socket-proxy",
+    "runner:build": "docker build -f apps/agent-runner/Dockerfile -t evolvesales/agent-runner:local ."
   },
   "devDependencies": {
     "@types/node": "^22.19.0",
