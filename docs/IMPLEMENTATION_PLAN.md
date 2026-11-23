@@ -1,7 +1,8 @@
 # EvolveSales — Detailed Implementation Plan (NestJS edition)
 
-> Status: **DRAFT — awaiting approval. No application code has been written.**
-> Date: 2026-11-19
+> Status: **Approved 2026-11-19; being built phase by phase.** Phases 0–2b merged; Phase 3 in review
+> (PR #4) as of 2026-11-23. Current state and next steps: [HANDOFF.md](../HANDOFF.md).
+> Originally drafted: 2026-11-19
 
 ---
 

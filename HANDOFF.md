@@ -1,0 +1,99 @@
+# HANDOFF — current state and where to resume
+
+> Last updated **2026-11-23**. Temporary status: update this file at the end of every working
+> session. Permanent knowledge belongs in [README.md](README.md), [AGENTS.md](AGENTS.md) and
+> [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) (the source of truth for decisions).
+
+## 1. Snapshot
+
+| Item          | State (verified 2026-11-23 unless marked)                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository    | `github.com/eraqaty/evolvesales` (**public**), default branch `main`                                                                                     |
+| `main`        | `abe3de4`: Phases 0, 1, 2a and 2b merged (PRs #1–#3)                                                                                                     |
+| Active branch | `phase-3/analysis` at `e0682f1`, pushed, nothing uncommitted except this handoff's documentation edits                                                   |
+| Open PR       | [#4 Phase 3: repository analysis](https://github.com/eraqaty/evolvesales/pull/4): CI `ci` **green**, mergeable, **waiting for the owner's review/merge** |
+| Next phase    | **Phase 4: coding agent**. Not started. It needs the owner's explicit approval after a plan-and-questions round (§5).                                    |
+
+## 2. What is done
+
+| Phase | Scope                                                                                                     | Status                                                                                         |
+| ----- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 0     | Monorepo bootstrap, CI, branch protection (§18)                                                           | merged                                                                                         |
+| 1     | Invoices, customers, products, auth (JWT + refresh), audit log                                            | merged                                                                                         |
+| 2a    | Change requests, AI assistant (web drawer), approvals, notifications, orchestrator skeleton               | merged. **Exit 2a with a real LLM was never run**: no `ANTHROPIC_API_KEY` in the local `.env`. |
+| 2b    | WhatsApp channel: linking, assistant, approval cards with PIN, notifications                              | merged. **Live WhatsApp not tested**: Meta and ngrok setup (P6/P7) not done.                   |
+| 3     | GitHub App, agent-runner container, egress proxy, socket proxy, PlanVerifier, Agents admin page, job logs | **PR #4 open**, CI green. **Exit 3 not run**: needs the GitHub App (P3) and an Anthropic key.  |
+| 4–6   | Coding agent, end-to-end demo + staging, production on Google Cloud                                       | not started                                                                                    |
+
+Details and the design decisions taken in each phase are in [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) §15a ("Phase N decisions" and "implementation notes").
+
+## 3. Active items and next concrete steps
+
+| #   | Item                           | Owner                 | Next concrete step                                                                                                                                                                                                                                                           | Relevant files                                                |
+| --- | ------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| A   | Merge PR #4                    | owner                 | Review on GitHub, then squash-merge. As the only maintainer, the owner merges with the admin bypass (plan §18). After the merge: `git checkout main && git pull`.                                                                                                            | PR #4                                                         |
+| B   | Exit 3: first real analysis    | owner, then agent     | Follow [docs/GITHUB_APP_SETUP.md](docs/GITHUB_APP_SETUP.md) steps 1–7. The agent can then watch the job log and check the plan and the container cleanup.                                                                                                                    | `apps/orchestrator/src/analysis/*`, `apps/agent-runner/src/*` |
+| C   | Exit 2a: real LLM conversation | owner                 | Put `ANTHROPIC_API_KEY` in `.env`, run api + web, and submit a request through **Request a change**.                                                                                                                                                                         | `apps/api/src/assistant/*`                                    |
+| D   | Exit 2b: live WhatsApp         | owner                 | [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md) (Meta test number, token, App Secret, 3 templates, ngrok static domain). Part 2 (Approve + PIN) needs B first.                                                                                                              | `apps/api/src/whatsapp/*`                                     |
+| E   | Phase 4: coding agent          | agent, after approval | Read §10, §11 and Phase 4 in the plan. Propose a detailed plan and ask the open questions (Bash allowlist, fix-round limits, DiffPolicyGate rules, PGlite question Q4, write-token scope). Wait for explicit approval, then branch `phase-4/coding` from the updated `main`. | `docs/IMPLEMENTATION_PLAN.md` §10, §11, §15a                  |
+
+## 4. Known issues
+
+- **This Windows PC is often under heavy CPU load** (other projects run here). Under load you can see:
+  - Vitest "Test timed out in 15000ms" in older web tests;
+  - "Failed to start forks worker";
+  - testcontainers errors ("Port 5432/tcp not bound", Docker HTTP 500).
+
+  These were environmental: re-running the failing package alone passed every time. Don't change product code because of them.
+
+- **Docker over a Windows named pipe** (dockerode default on Windows):
+  - half-closing an attached stream also closes the output;
+  - docker-modem can prepend the attach options JSON to the container's stdin.
+
+  Both are handled in `apps/orchestrator/src/agent/docker-launcher.ts` and `apps/agent-runner/src/main.ts`, and pinned by `apps/orchestrator/test/launcher.docker-spec.ts`. Keep those behaviours.
+
+- **`prisma migrate dev` hangs** on an interactive prompt in this environment. Create migrations with `pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script` (run in `packages/db`, stdout redirected to a file), then hand-edit and `pnpm db:migrate`.
+- **`prisma generate` is slow** here (about 2 minutes under load).
+- **Lint warnings:** oxlint reports `no-unsafe-type-assertion` and similar warnings across the codebase. Only **errors** fail `pnpm lint`; there are currently 0 errors.
+- **Leftover local branches** `phase-1/…`, `phase-2/…` and `phase-2b/…` are already merged. They're harmless and can be deleted when convenient.
+
+## 5. Open decisions and unverified details
+
+- **Phase 4 design questions** are not decided yet. Ask before coding: see item E and plan §10.
+- **AGENTS.md says AI agents must not modify `deploy/` or `.github/`.**
+  - Phase 0 (`.github/workflows/ci.yml`, `deploy/compose.dev.yml`) and Phase 3 (`deploy/compose.dev.yml`, `deploy/docker-socket-proxy/`) changed `deploy/` as part of owner-approved phase plans. The plan lists that infrastructure as phase work.
+  - Reading of the rule, inferred from the chat history and **not written down by the owner**: it binds the in-app coding agent (Phase 4+), and the DiffPolicyGate must enforce it. Development sessions may change `deploy/` and `.github/` only when an approved phase plan says so.
+  - **Confirm this with the owner** before touching those folders again.
+- **Self-hosted runner (P4), GCP (P8):** not started; they are needed for Phases 5 and 6.
+- **Phase 5 CI image build:** the runner image is built locally for now (`pnpm runner:build`); building it in CI was deferred to Phase 5 (Phase 3 decisions).
+- Everything else that was decided in chat is recorded in `docs/IMPLEMENTATION_PLAN.md` under "Phase N decisions". Nothing else known exists only in the previous chat.
+
+## 6. Outside the repository (transfer or set up separately)
+
+| What                    | Where                                                                      | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.env`                  | repository root, git-ignored                                               | It currently sets the DB, JWT and seed values only. **No** `ANTHROPIC_API_KEY`, WhatsApp or GitHub App values yet. Copy it privately or recreate it from `.env.example`; never commit or paste it.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| GitHub access           | `gh` CLI                                                                   | Pushes must use the GitHub account **`eraqaty`**. This PC's default git credential is a different account, so the repository has a local credential helper (`!gh auth git-credential`) and a local identity `eraqaty` with GitHub's **noreply** address. Commits must keep the noreply address (public repo). On a new machine: `gh auth login` as `eraqaty`, then in the clone: `git config --local user.name eraqaty`, `git config --local user.email 3996840+eraqaty@users.noreply.github.com`, `git config --local credential.https://github.com.helper ""` and `git config --local --add credential.https://github.com.helper "!gh auth git-credential"`. |
+| GitHub App `.pem`       | outside the repository (e.g. `C:\Users\<you>\.evolvesales\github-app.pem`) | Not created yet (P3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Anthropic key           | Anthropic Console                                                          | Not configured yet (P2). Use a dedicated key with a spend limit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Meta and ngrok accounts | Meta for Developers, ngrok dashboard                                       | Not set up yet (P6, P7).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Docker state            | Docker Desktop                                                             | Volume `evolvesales-dev_postgres-data` (local DB with seed data; recreate with `pnpm db:up && pnpm db:migrate && pnpm db:seed`). Image `evolvesales/agent-runner:local` (rebuild with `pnpm runner:build`). Containers from `pnpm agents:up`.                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Branch protection       | GitHub repository settings                                                 | Applied 2026-11-19 (plan §18); the owner merges with the admin bypass.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Claude Code memory      | the previous account's memory folder                                       | Not needed: its notes are now in CLAUDE.md ("Working agreements") and this file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+
+## 7. Commands checked for this handoff
+
+| Command                                                               | Result                                               | When                              |
+| --------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------- |
+| `pnpm verify`                                                         | ✅ exit 0                                            | 2026-11-22, on `phase-3/analysis` |
+| `pnpm test:e2e` (API 80, orchestrator 13, Docker 7)                   | ✅ (Docker tests 3 runs in a row after the last fix) | 2026-11-22                        |
+| GitHub CI on PR #4                                                    | ✅ `ci` SUCCESS                                      | 2026-11-23                        |
+| `docker compose -f deploy/compose.dev.yml --profile agents config -q` | ✅                                                   | 2026-11-23                        |
+| `node -v` / `pnpm -v` / `docker --version`                            | v22.23.4 / 12.21.0 / 28.4.0                          | 2026-11-23                        |
+
+## 8. How to resume (fresh clone)
+
+1. Read [CLAUDE.md](CLAUDE.md), which loads [AGENTS.md](AGENTS.md), then this file, then [README.md](README.md) "Getting started".
+2. Ask the owner whether PR #4 is merged. Then check out and pull `main` (or `phase-3/analysis` if not merged).
+3. Run setup per README, then `pnpm verify`.
+4. Continue with the first open item in §3 that the owner chooses. Don't start Phase 4 without explicit approval.
